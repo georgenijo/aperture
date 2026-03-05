@@ -76,10 +76,13 @@ class CameraManager: NSObject, ObservableObject {
     func capturePhoto() {
         sessionQueue.async { [weak self] in
             guard let self else { return }
-            let settings = AVCapturePhotoSettings()
+            let settings: AVCapturePhotoSettings
             if self.photoOutput.availablePhotoCodecTypes.contains(.hevc) {
-                settings.photoQualityPrioritization = .quality
+                settings = AVCapturePhotoSettings(format: [AVVideoCodecKey: AVVideoCodecType.hevc])
+            } else {
+                settings = AVCapturePhotoSettings()
             }
+            settings.photoQualityPrioritization = .quality
             self.photoOutput.capturePhoto(with: settings, delegate: self)
         }
     }
@@ -88,9 +91,20 @@ class CameraManager: NSObject, ObservableObject {
 extension CameraManager: AVCapturePhotoCaptureDelegate {
     func photoOutput(_ output: AVCapturePhotoOutput,
                      didFinishProcessingPhoto photo: AVCapturePhoto, error: Error?) {
-        guard let data = photo.fileDataRepresentation() else { return }
-        if let _ = PhotoStorage.savePhoto(data) {
+        if let error {
+            print("Photo capture failed: \(error)")
+            return
+        }
+        guard let data = photo.fileDataRepresentation() else {
+            print("Failed to get photo data representation")
+            return
+        }
+
+        let fileExtension = photoOutput.availablePhotoCodecTypes.contains(.hevc) ? "heic" : "jpg"
+        if let _ = PhotoStorage.savePhoto(data, fileExtension: fileExtension) {
             print("Photo saved successfully")
+        } else {
+            print("Photo save failed")
         }
     }
 }

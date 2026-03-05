@@ -18,11 +18,11 @@ struct PhotoStorage {
         }
     }
 
-    static func savePhoto(_ imageData: Data) -> String? {
+    static func savePhoto(_ imageData: Data, fileExtension: String = "jpg") -> String? {
         ensureDirectoryExists()
 
         let id = UUID().uuidString
-        let filename = "\(id).jpg"
+        let filename = "\(id).\(fileExtension)"
         let photoURL = photosDirectory.appendingPathComponent(filename)
         let metadataURL = photosDirectory.appendingPathComponent("\(id).json")
 
