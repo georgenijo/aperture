@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ContentView: View {
     @StateObject private var cameraManager = CameraManager()
+    @State private var showFlash = false
 
     var body: some View {
         ZStack {
@@ -11,6 +12,17 @@ struct ContentView: View {
             case .authorized:
                 CameraPreview(session: cameraManager.session)
                     .ignoresSafeArea()
+
+                VStack {
+                    Spacer()
+                    shutterButton
+                        .padding(.bottom, 40)
+                }
+
+                if showFlash {
+                    Color.white.ignoresSafeArea()
+                        .allowsHitTesting(false)
+                }
 
             case .notDetermined:
                 promptView
@@ -52,6 +64,25 @@ struct ContentView: View {
                 .multilineTextAlignment(.center)
                 .foregroundStyle(.gray)
                 .padding(.horizontal, 40)
+        }
+    }
+
+    private var shutterButton: some View {
+        Button {
+            cameraManager.capturePhoto()
+            showFlash = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                showFlash = false
+            }
+        } label: {
+            ZStack {
+                Circle()
+                    .fill(.white)
+                    .frame(width: 70, height: 70)
+                Circle()
+                    .stroke(.white, lineWidth: 4)
+                    .frame(width: 80, height: 80)
+            }
         }
     }
 

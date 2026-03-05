@@ -6,6 +6,7 @@ class CameraManager: NSObject, ObservableObject {
 
     private let sessionQueue = DispatchQueue(label: "com.georgenijo.Aperture.sessionQueue")
     private var currentInput: AVCaptureDeviceInput?
+    private let photoOutput = AVCapturePhotoOutput()
 
     override init() {
         super.init()
@@ -65,6 +66,31 @@ class CameraManager: NSObject, ObservableObject {
             print("Failed to create camera input: \(error)")
         }
 
+        if session.canAddOutput(photoOutput) {
+            session.addOutput(photoOutput)
+        }
+
         session.commitConfiguration()
+    }
+
+    func capturePhoto() {
+        sessionQueue.async { [weak self] in
+            guard let self else { return }
+            let settings = AVCapturePhotoSettings()
+            if self.photoOutput.availablePhotoCodecTypes.contains(.hevc) {
+                settings.photoQualityPrioritization = .quality
+            }
+            self.photoOutput.capturePhoto(with: settings, delegate: self)
+        }
+    }
+}
+
+extension CameraManager: AVCapturePhotoCaptureDelegate {
+    func photoOutput(_ output: AVCapturePhotoOutput,
+                     didFinishProcessingPhoto photo: AVCapturePhoto, error: Error?) {
+        guard let data = photo.fileDataRepresentation() else { return }
+        if let _ = PhotoStorage.savePhoto(data) {
+            print("Photo saved successfully")
+        }
     }
 }
