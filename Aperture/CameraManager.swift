@@ -27,9 +27,17 @@ class CameraManager: NSObject, ObservableObject {
 
     func startSession() {
         guard authorizationStatus == .authorized else { return }
+        let startTime = CFAbsoluteTimeGetCurrent()
         sessionQueue.async { [weak self] in
-            self?.configureSession()
-            self?.session.startRunning()
+            guard let self else { return }
+            let configStart = CFAbsoluteTimeGetCurrent()
+            self.configureSession()
+            print("[Timing] configureSession: \(String(format: "%.0f", (CFAbsoluteTimeGetCurrent() - configStart) * 1000))ms")
+
+            let runStart = CFAbsoluteTimeGetCurrent()
+            self.session.startRunning()
+            print("[Timing] startRunning: \(String(format: "%.0f", (CFAbsoluteTimeGetCurrent() - runStart) * 1000))ms")
+            print("[Timing] total startup: \(String(format: "%.0f", (CFAbsoluteTimeGetCurrent() - startTime) * 1000))ms")
         }
     }
 
