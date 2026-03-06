@@ -5,6 +5,7 @@ struct ContentView: View {
     @State private var showFlash = false
     @State private var showLab = false
     @State private var lastPhotoThumbnail: UIImage?
+    @State private var photoCount = 0
 
     var body: some View {
         ZStack {
@@ -51,8 +52,12 @@ struct ContentView: View {
                 cameraManager.requestPermission()
             }
         }
-        .onDisappear {
-            cameraManager.stopSession()
+        .onChange(of: showLab) { _, isShowingLab in
+            if isShowingLab {
+                cameraManager.stopSession()
+            } else {
+                cameraManager.startSession()
+            }
         }
         .onChange(of: cameraManager.authorizationStatus) { _, newValue in
             if newValue == .authorized {
@@ -61,12 +66,17 @@ struct ContentView: View {
         }
         .fullScreenCover(isPresented: $showLab) {
             loadLastPhotoThumbnail()
+            photoCount = PhotoStorage.loadAllPhotos().count
         } content: {
             LabView()
         }
-        .task { loadLastPhotoThumbnail() }
+        .task {
+            loadLastPhotoThumbnail()
+            photoCount = PhotoStorage.loadAllPhotos().count
+        }
         .onChange(of: cameraManager.photoSaveCount) { _, _ in
             loadLastPhotoThumbnail()
+            photoCount += 1
         }
     }
 
@@ -87,17 +97,29 @@ struct ContentView: View {
 
     private var labButton: some View {
         Button { showLab = true } label: {
-            if let lastPhotoThumbnail {
-                Image(uiImage: lastPhotoThumbnail)
-                    .resizable()
-                    .scaledToFill()
-                    .frame(width: 50, height: 50)
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
-            } else {
-                Image(systemName: "photo.on.rectangle")
-                    .font(.system(size: 24))
-                    .foregroundStyle(.white)
-                    .frame(width: 50, height: 50)
+            ZStack(alignment: .topTrailing) {
+                if let lastPhotoThumbnail {
+                    Image(uiImage: lastPhotoThumbnail)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: 50, height: 50)
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                } else {
+                    Image(systemName: "photo.on.rectangle")
+                        .font(.system(size: 24))
+                        .foregroundStyle(.white)
+                        .frame(width: 50, height: 50)
+                }
+
+                if photoCount > 0 {
+                    Text("\(photoCount)")
+                        .font(.caption2.weight(.bold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 1)
+                        .background(Capsule().fill(.red))
+                        .offset(x: 6, y: -6)
+                }
             }
         }
     }
