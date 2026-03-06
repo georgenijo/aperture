@@ -8,6 +8,7 @@ class CameraManager: NSObject, ObservableObject {
     private let sessionQueue = DispatchQueue(label: "com.georgenijo.Aperture.sessionQueue")
     private var currentInput: AVCaptureDeviceInput?
     private let photoOutput = AVCapturePhotoOutput()
+    private var captureStartTime: CFAbsoluteTime = 0
 
     override init() {
         super.init()
@@ -98,6 +99,7 @@ class CameraManager: NSObject, ObservableObject {
             }
             DispatchQueue.main.async { self.isCapturing = true }
             settings.photoQualityPrioritization = self.photoOutput.maxPhotoQualityPrioritization
+            self.captureStartTime = CFAbsoluteTimeGetCurrent()
             print("[Capture] capturing photo...")
             self.photoOutput.capturePhoto(with: settings, delegate: self)
         }
@@ -113,10 +115,14 @@ extension CameraManager: AVCapturePhotoCaptureDelegate {
             print("[Capture] failed: \(error)")
             return
         }
+        let processingMs = String(format: "%.0f", (CFAbsoluteTimeGetCurrent() - captureStartTime) * 1000)
         guard let data = photo.fileDataRepresentation() else {
             print("[Capture] failed to get photo data representation")
             return
         }
+
+        let sizeMB = String(format: "%.1f", Double(data.count) / 1_000_000)
+        print("[Capture] processed in \(processingMs)ms (\(sizeMB)MB)")
 
         let fileExtension = photoOutput.availablePhotoCodecTypes.contains(.hevc) ? "heic" : "jpg"
         if let _ = PhotoStorage.savePhoto(data, fileExtension: fileExtension) {
