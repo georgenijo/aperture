@@ -13,6 +13,8 @@
 		A10000010000000000000004 /* CameraManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000020000000000000005 /* CameraManager.swift */; };
 		A10000010000000000000005 /* CameraPreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000020000000000000006 /* CameraPreview.swift */; };
 		A10000010000000000000006 /* PhotoStorage.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000020000000000000007 /* PhotoStorage.swift */; };
+		A10000010000000000000007 /* LabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000020000000000000008 /* LabView.swift */; };
+		A10000010000000000000008 /* PhotoDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000020000000000000009 /* PhotoDetailView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -23,6 +25,8 @@
 		A10000020000000000000005 /* CameraManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraManager.swift; sourceTree = "<group>"; };
 		A10000020000000000000006 /* CameraPreview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraPreview.swift; sourceTree = "<group>"; };
 		A10000020000000000000007 /* PhotoStorage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoStorage.swift; sourceTree = "<group>"; };
+		A10000020000000000000008 /* LabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LabView.swift; sourceTree = "<group>"; };
+		A10000020000000000000009 /* PhotoDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoDetailView.swift; sourceTree = "<group>"; };
 		A10000020000000000000010 /* Aperture.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Aperture.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -53,6 +57,8 @@
 				A10000020000000000000005 /* CameraManager.swift */,
 				A10000020000000000000006 /* CameraPreview.swift */,
 				A10000020000000000000007 /* PhotoStorage.swift */,
+				A10000020000000000000008 /* LabView.swift */,
+				A10000020000000000000009 /* PhotoDetailView.swift */,
 				A10000020000000000000003 /* Assets.xcassets */,
 				A10000020000000000000004 /* Info.plist */,
 			);
@@ -141,6 +147,8 @@
 				A10000010000000000000004 /* CameraManager.swift in Sources */,
 				A10000010000000000000005 /* CameraPreview.swift in Sources */,
 				A10000010000000000000006 /* PhotoStorage.swift in Sources */,
+				A10000010000000000000007 /* LabView.swift in Sources */,
+				A10000010000000000000008 /* PhotoDetailView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
