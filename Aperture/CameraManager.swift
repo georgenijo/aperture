@@ -76,6 +76,11 @@ class CameraManager: NSObject, ObservableObject {
     func capturePhoto() {
         sessionQueue.async { [weak self] in
             guard let self else { return }
+            guard self.session.isRunning,
+                  self.photoOutput.connection(with: .video) != nil else {
+                print("Cannot capture: no active video connection")
+                return
+            }
             let settings: AVCapturePhotoSettings
             if self.photoOutput.availablePhotoCodecTypes.contains(.hevc) {
                 settings = AVCapturePhotoSettings(format: [AVVideoCodecKey: AVVideoCodecType.hevc])
