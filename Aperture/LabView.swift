@@ -11,25 +11,27 @@ struct LabView: View {
 
     var body: some View {
         NavigationStack {
-            Group {
+            ZStack {
+                Color.black.ignoresSafeArea()
+
                 if photos.isEmpty {
                     emptyState
                 } else {
                     galleryGrid
                 }
             }
-            .background(Color.black)
             .navigationTitle("The Lab")
             .navigationBarTitleDisplayMode(.inline)
             .toolbarColorScheme(.dark, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
             .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
+                ToolbarItem(placement: .cancellationAction) {
                     Button { dismiss() } label: {
                         Image(systemName: "xmark")
                             .foregroundStyle(.white)
                     }
                 }
-                ToolbarItem(placement: .navigationBarTrailing) {
+                ToolbarItem(placement: .primaryAction) {
                     Button { showDeleteAllConfirmation = true } label: {
                         Image(systemName: "trash")
                             .foregroundStyle(.red)
@@ -71,8 +73,9 @@ struct LabView: View {
                 ForEach(photos, id: \.filename) { photo in
                     NavigationLink(value: photo) {
                         ThumbnailView(photo: photo)
-                            .aspectRatio(1, contentMode: .fill)
+                            .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)
                             .clipped()
+                            .aspectRatio(1, contentMode: .fit)
                     }
                 }
             }
@@ -178,7 +181,7 @@ private struct ThumbnailView: View {
             if let image {
                 Image(uiImage: image)
                     .resizable()
-                    .scaledToFill()
+                    .aspectRatio(contentMode: .fill)
             } else {
                 Color.gray.opacity(0.3)
             }
