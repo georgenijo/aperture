@@ -3,6 +3,7 @@ import AVFoundation
 class CameraManager: NSObject, ObservableObject {
     let session = AVCaptureSession()
     @Published var authorizationStatus: AVAuthorizationStatus = .notDetermined
+    @Published var isCapturing = false
 
     private let sessionQueue = DispatchQueue(label: "com.georgenijo.Aperture.sessionQueue")
     private var currentInput: AVCaptureDeviceInput?
@@ -95,7 +96,8 @@ class CameraManager: NSObject, ObservableObject {
             } else {
                 settings = AVCapturePhotoSettings()
             }
-            settings.photoQualityPrioritization = .balanced
+            DispatchQueue.main.async { self.isCapturing = true }
+            settings.photoQualityPrioritization = self.photoOutput.maxPhotoQualityPrioritization
             print("[Capture] capturing photo...")
             self.photoOutput.capturePhoto(with: settings, delegate: self)
         }
@@ -105,20 +107,22 @@ class CameraManager: NSObject, ObservableObject {
 extension CameraManager: AVCapturePhotoCaptureDelegate {
     func photoOutput(_ output: AVCapturePhotoOutput,
                      didFinishProcessingPhoto photo: AVCapturePhoto, error: Error?) {
+        defer { DispatchQueue.main.async { self.isCapturing = false } }
+
         if let error {
-            print("Photo capture failed: \(error)")
+            print("[Capture] failed: \(error)")
             return
         }
         guard let data = photo.fileDataRepresentation() else {
-            print("Failed to get photo data representation")
+            print("[Capture] failed to get photo data representation")
             return
         }
 
         let fileExtension = photoOutput.availablePhotoCodecTypes.contains(.hevc) ? "heic" : "jpg"
         if let _ = PhotoStorage.savePhoto(data, fileExtension: fileExtension) {
-            print("Photo saved successfully")
+            print("[Capture] photo saved successfully")
         } else {
-            print("Photo save failed")
+            print("[Capture] photo save failed")
         }
     }
 }

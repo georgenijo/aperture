@@ -77,13 +77,14 @@ struct ContentView: View {
         } label: {
             ZStack {
                 Circle()
-                    .fill(.white)
+                    .fill(cameraManager.isCapturing ? .gray : .white)
                     .frame(width: 70, height: 70)
                 Circle()
-                    .stroke(.white, lineWidth: 4)
+                    .stroke(cameraManager.isCapturing ? .gray : .white, lineWidth: 4)
                     .frame(width: 80, height: 80)
             }
         }
+        .disabled(cameraManager.isCapturing)
     }
 
     private var deniedView: some View {
