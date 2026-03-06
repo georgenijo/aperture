@@ -4,6 +4,7 @@ class CameraManager: NSObject, ObservableObject {
     let session = AVCaptureSession()
     @Published var authorizationStatus: AVAuthorizationStatus = .notDetermined
     @Published var isCapturing = false
+    @Published var photoSaveCount = 0
 
     private let sessionQueue = DispatchQueue(label: "com.georgenijo.Aperture.sessionQueue")
     private var currentInput: AVCaptureDeviceInput?
@@ -133,6 +134,7 @@ extension CameraManager: AVCapturePhotoCaptureDelegate {
         let fileExtension = photoOutput.availablePhotoCodecTypes.contains(.hevc) ? "heic" : "jpg"
         if let _ = PhotoStorage.savePhoto(data, fileExtension: fileExtension) {
             print("[Capture] photo saved successfully")
+            DispatchQueue.main.async { self.photoSaveCount += 1 }
         } else {
             print("[Capture] photo save failed")
         }

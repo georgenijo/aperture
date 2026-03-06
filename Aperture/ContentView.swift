@@ -65,6 +65,9 @@ struct ContentView: View {
             LabView()
         }
         .task { loadLastPhotoThumbnail() }
+        .onChange(of: cameraManager.photoSaveCount) { _, _ in
+            loadLastPhotoThumbnail()
+        }
     }
 
     private var promptView: some View {
