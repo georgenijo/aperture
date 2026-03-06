@@ -31,13 +31,13 @@ struct LabView: View {
                             .foregroundStyle(.white)
                     }
                 }
-                ToolbarItem(placement: .primaryAction) {
-                    Button { showDeleteAllConfirmation = true } label: {
-                        Image(systemName: "trash")
-                            .foregroundStyle(.red)
+                if !photos.isEmpty {
+                    ToolbarItem(placement: .primaryAction) {
+                        Button { showDeleteAllConfirmation = true } label: {
+                            Image(systemName: "trash")
+                                .foregroundStyle(.red)
+                        }
                     }
-                    .opacity(photos.isEmpty ? 0 : 1)
-                    .disabled(photos.isEmpty)
                 }
             }
         }

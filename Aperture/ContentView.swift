@@ -65,18 +65,15 @@ struct ContentView: View {
             }
         }
         .fullScreenCover(isPresented: $showLab) {
-            loadLastPhotoThumbnail()
-            photoCount = PhotoStorage.loadAllPhotos().count
+            refreshPhotoState()
         } content: {
             LabView()
         }
         .task {
-            loadLastPhotoThumbnail()
-            photoCount = PhotoStorage.loadAllPhotos().count
+            refreshPhotoState()
         }
         .onChange(of: cameraManager.photoSaveCount) { _, _ in
-            loadLastPhotoThumbnail()
-            photoCount += 1
+            refreshPhotoState()
         }
     }
 
@@ -116,6 +113,8 @@ struct ContentView: View {
                     }
             }
         }
+        .accessibilityLabel("Lab")
+        .accessibilityValue(photoCount == 1 ? "1 photo" : "\(photoCount) photos")
     }
 
     @ViewBuilder
@@ -151,8 +150,10 @@ struct ContentView: View {
         .disabled(cameraManager.isCapturing)
     }
 
-    private func loadLastPhotoThumbnail() {
-        guard let latest = PhotoStorage.loadAllPhotos().first else {
+    private func refreshPhotoState() {
+        let photos = PhotoStorage.loadAllPhotos()
+        photoCount = photos.count
+        guard let latest = photos.first else {
             lastPhotoThumbnail = nil
             return
         }
