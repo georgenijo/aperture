@@ -9,6 +9,7 @@ class CameraManager: NSObject, ObservableObject {
     private var currentInput: AVCaptureDeviceInput?
     private let photoOutput = AVCapturePhotoOutput()
     private var captureStartTime: CFAbsoluteTime = 0
+    private var captureInFlight = false
 
     override init() {
         super.init()
@@ -86,11 +87,13 @@ class CameraManager: NSObject, ObservableObject {
     func capturePhoto() {
         sessionQueue.async { [weak self] in
             guard let self else { return }
-            guard self.session.isRunning,
+            guard !self.captureInFlight,
+                  self.session.isRunning,
                   self.photoOutput.connection(with: .video) != nil else {
-                print("Cannot capture: no active video connection")
+                print("[Capture] skipped: \(self.captureInFlight ? "capture in flight" : "no active video connection")")
                 return
             }
+            self.captureInFlight = true
             let settings: AVCapturePhotoSettings
             if self.photoOutput.availablePhotoCodecTypes.contains(.hevc) {
                 settings = AVCapturePhotoSettings(format: [AVVideoCodecKey: AVVideoCodecType.hevc])
@@ -109,7 +112,10 @@ class CameraManager: NSObject, ObservableObject {
 extension CameraManager: AVCapturePhotoCaptureDelegate {
     func photoOutput(_ output: AVCapturePhotoOutput,
                      didFinishProcessingPhoto photo: AVCapturePhoto, error: Error?) {
-        defer { DispatchQueue.main.async { self.isCapturing = false } }
+        defer {
+            sessionQueue.async { self.captureInFlight = false }
+            DispatchQueue.main.async { self.isCapturing = false }
+        }
 
         if let error {
             print("[Capture] failed: \(error)")
