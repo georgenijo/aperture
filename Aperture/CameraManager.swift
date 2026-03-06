@@ -87,7 +87,7 @@ class CameraManager: NSObject, ObservableObject {
             } else {
                 settings = AVCapturePhotoSettings()
             }
-            settings.photoQualityPrioritization = .quality
+            settings.photoQualityPrioritization = self.photoOutput.maxPhotoQualityPrioritization
             self.photoOutput.capturePhoto(with: settings, delegate: self)
         }
     }
