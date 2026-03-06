@@ -25,7 +25,10 @@ Read these before working on a feature:
 | File | Purpose |
 |------|---------|
 | `ApertureApp.swift` | App entry point, SwiftUI lifecycle |
-| `ContentView.swift` | Root view — will wire camera and gallery |
+| `ContentView.swift` | Root view — camera preview, shutter button, permission handling |
+| `CameraManager.swift` | AVFoundation session, photo capture (HEVC/JPEG), delegate handling |
+| `CameraPreview.swift` | UIViewRepresentable wrapping AVCaptureVideoPreviewLayer |
+| `PhotoStorage.swift` | Saves photos + JSON metadata to Documents/photos/ |
 | `Assets.xcassets` | Asset catalog (app icon, accent color) |
 | `Info.plist` | Camera permission (NSCameraUsageDescription) |
 
@@ -45,6 +48,9 @@ Read these before working on a feature:
 - `AVCaptureSession` configuration changes must be wrapped in `beginConfiguration()`/`commitConfiguration()`
 - Always query `AVCaptureDevice.DiscoverySession` for available lenses — not all iPhones have the same cameras
 - High-res photos can be 12-48MP — use `CIImage` (lazy evaluation) through the pipeline, only render to `CGImage` at the final output step
+- `AVCapturePhotoSettings.photoQualityPrioritization` must not exceed `photoOutput.maxPhotoQualityPrioritization` or it crashes
+- `.quality` prioritization triggers Deep Fusion (~800ms on iPhone 15 Pro Max) — lock the shutter button during capture
+- Camera startup (`session.startRunning()`) blocks for ~300ms — this is normal hardware spin-up
 
 ## Project Config
 
