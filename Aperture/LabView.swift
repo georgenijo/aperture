@@ -1,196 +1,292 @@
 import SwiftUI
-import ImageIO
-import UniformTypeIdentifiers
 
 struct LabView: View {
-    @Environment(\.dismiss) private var dismiss
-    @State private var photos: [PhotoMetadata] = []
-    @State private var showDeleteAllConfirmation = false
+  @ObservedObject var model: AppModel
+  @Environment(\.dismiss) private var dismiss
+  @State private var selectionMode = false
+  @State private var selectedIDs: Set<UUID> = []
+  @State private var showDeleteConfirmation = false
+  @State private var isExporting = false
+  @State private var localNotice: String?
+  @State private var shareURLs: [URL] = []
 
-    private let columns = Array(repeating: GridItem(.flexible(), spacing: 2), count: 3)
+  private let columns = [
+    GridItem(.flexible(), spacing: 3), GridItem(.flexible(), spacing: 3),
+    GridItem(.flexible(), spacing: 3),
+  ]
 
-    var body: some View {
-        NavigationStack {
-            ZStack {
-                Color.black.ignoresSafeArea()
-
-                if photos.isEmpty {
-                    emptyState
-                } else {
-                    galleryGrid
-                }
+  var body: some View {
+    NavigationStack {
+      ZStack {
+        ApertureStyle.ink.ignoresSafeArea()
+        content
+      }
+      .navigationTitle("The Lab")
+      .navigationBarTitleDisplayMode(.inline)
+      .toolbarColorScheme(.dark, for: .navigationBar)
+      .toolbarBackground(ApertureStyle.ink, for: .navigationBar)
+      .toolbar {
+        ToolbarItem(placement: .cancellationAction) {
+          Button {
+            dismiss()
+          } label: {
+            Image(systemName: "xmark")
+          }
+          .accessibilityLabel("Close Lab")
+        }
+        ToolbarItemGroup(placement: .primaryAction) {
+          if !model.items.isEmpty {
+            Button(selectionMode ? "Done" : "Select") {
+              selectionMode.toggle()
+              if !selectionMode { selectedIDs.removeAll() }
             }
-            .navigationTitle("The Lab")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbarColorScheme(.dark, for: .navigationBar)
-            .toolbarBackground(.visible, for: .navigationBar)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button { dismiss() } label: {
-                        Image(systemName: "xmark")
-                            .foregroundStyle(.white)
+            .accessibilityIdentifier("lab-select")
+            if selectionMode && !selectedIDs.isEmpty {
+              Button {
+                isExporting = true
+                Task {
+                  if await model.export(selectedItems) {
+                    localNotice =
+                      selectedItems.count == 1
+                      ? "Saved to Photos." : "Saved \(selectedItems.count) media items to Photos."
+                  }
+                  isExporting = false
+                }
+              } label: {
+                Image(systemName: "photo.badge.arrow.down")
+              }
+              .disabled(isExporting)
+              .accessibilityIdentifier("lab-export")
+              .accessibilityLabel("Save selected \(selectedMediaDescription) to Photos")
+              .accessibilityHint("Export the selected media to the Photos app")
+              Button {
+                Task {
+                  do {
+                    var urls: [URL] = []
+                    for item in selectedItems where item.processing.phase == .ready {
+                      if let url = try await model.processedURL(for: item) {
+                        urls.append(url)
+                      }
                     }
-                }
-                if !photos.isEmpty {
-                    ToolbarItem(placement: .primaryAction) {
-                        Button { showDeleteAllConfirmation = true } label: {
-                            Image(systemName: "trash")
-                                .foregroundStyle(.red)
-                        }
+                    guard !urls.isEmpty else {
+                      model.errorMessage = "There is no developed media to share yet."
+                      return
                     }
+                    shareURLs = urls
+                  } catch {
+                    model.errorMessage = error.localizedDescription
+                  }
                 }
+              } label: {
+                Image(systemName: "square.and.arrow.up")
+              }
+              .accessibilityIdentifier("lab-share")
+              .accessibilityLabel("Share selected \(selectedMediaDescription)")
+              .accessibilityHint("Share the selected media")
+              Button {
+                showDeleteConfirmation = true
+              } label: {
+                Image(systemName: "trash")
+              }
+              .foregroundStyle(.red)
+              .accessibilityIdentifier("lab-delete")
+              .accessibilityLabel("Delete selected \(selectedMediaDescription)")
+              .accessibilityHint("Delete the selected media from the Lab")
             }
+          }
         }
-        .onAppear {
-            photos = PhotoStorage.loadAllPhotos()
+      }
+      .navigationDestination(for: MediaItem.self) { item in
+        PhotoDetailView(itemID: item.id, model: model)
+      }
+    }
+    .task { await model.refresh() }
+    .confirmationDialog(
+      selectedIDs.count == 1 ? "Delete this media?" : "Delete \(selectedIDs.count) media items?",
+      isPresented: $showDeleteConfirmation,
+      titleVisibility: .visible
+    ) {
+      Button("Delete", role: .destructive) {
+        Task {
+          let toDelete = selectedItems
+          for item in toDelete { _ = await model.delete(item) }
+          selectedIDs.removeAll()
+          selectionMode = false
         }
-        .confirmationDialog("Delete all photos?", isPresented: $showDeleteAllConfirmation, titleVisibility: .visible) {
-            Button("Delete All", role: .destructive) {
-                for photo in photos {
-                    PhotoStorage.deletePhoto(photo)
-                }
-                ThumbnailCache.shared.clearAll()
-                photos = []
-            }
+      }
+      .accessibilityIdentifier("lab-delete-confirm")
+      Button("Cancel", role: .cancel) {}
+    }
+    .alert(
+      "Aperture",
+      isPresented: Binding(
+        get: { model.errorMessage != nil }, set: { if !$0 { model.errorMessage = nil } })
+    ) {
+      Button("OK") { model.errorMessage = nil }
+    } message: {
+      Text(model.errorMessage ?? "")
+    }
+    .sheet(isPresented: Binding(get: { !shareURLs.isEmpty }, set: { if !$0 { shareURLs = [] } })) {
+      ShareSheet(activityItems: shareURLs.map { $0 as Any })
+    }
+    .overlay(alignment: .top) {
+      if let localNotice {
+        Text(localNotice)
+          .font(.subheadline.weight(.semibold))
+          .foregroundStyle(ApertureStyle.bone)
+          .padding(.horizontal, 14).padding(.vertical, 10)
+          .background(ApertureStyle.panelRaised, in: Capsule())
+          .overlay(Capsule().stroke(.white.opacity(0.12)))
+          .padding(.top, 12)
+          .onTapGesture { self.localNotice = nil }
+      }
+    }
+  }
+
+  @ViewBuilder
+  private var content: some View {
+    if !model.isPrepared {
+      VStack(spacing: 14) {
+        ProgressView().tint(ApertureStyle.amber)
+        Text("Opening the Lab…").font(.subheadline).foregroundStyle(ApertureStyle.muted)
+      }
+    } else if model.items.isEmpty {
+      emptyState
+    } else {
+      ScrollView {
+        LazyVGrid(columns: columns, spacing: 3) {
+          ForEach(model.items) { item in
+            tile(item)
+          }
+        }
+        .padding(.horizontal, 3)
+        .padding(.bottom, 18)
+      }
+      .scrollIndicators(.hidden)
+    }
+  }
+
+  private var emptyState: some View {
+    VStack(spacing: 16) {
+      Image(systemName: "photo.on.rectangle.angled")
+        .font(.system(size: 45, weight: .light))
+        .foregroundStyle(ApertureStyle.amber)
+      Text("Nothing developed yet")
+        .font(.title3.weight(.semibold)).foregroundStyle(ApertureStyle.bone)
+      Text(
+        "Your photos and videos will appear here after you capture them. The Lab keeps the camera simple and the archive yours."
+      )
+      .font(.subheadline).foregroundStyle(ApertureStyle.muted)
+      .multilineTextAlignment(.center).padding(.horizontal, 42)
+      Text("Take a photo or video to begin")
+        .font(.caption.weight(.semibold)).foregroundStyle(ApertureStyle.amber)
+    }
+    .frame(maxWidth: .infinity, maxHeight: .infinity)
+    .accessibilityIdentifier("lab-empty")
+  }
+
+  @ViewBuilder
+  private func tile(_ item: MediaItem) -> some View {
+    let card = MediaThumbnailView(
+      item: item,
+      mediaLibrary: model.mediaLibrary,
+      thumbnailService: model.thumbnailService,
+      maximumPixelDimension: 520
+    )
+    .aspectRatio(1, contentMode: .fit)
+    .overlay(alignment: .topLeading) {
+      if item.isFavorite {
+        Image(systemName: "star.fill").font(.caption2.weight(.bold)).foregroundStyle(
+          ApertureStyle.amber
+        ).padding(7)
+      }
+    }
+    .overlay(alignment: .topTrailing) {
+      if selectionMode {
+        Image(systemName: selectedIDs.contains(item.id) ? "checkmark.circle.fill" : "circle")
+          .font(.title3).symbolRenderingMode(.palette)
+          .foregroundStyle(
+            selectedIDs.contains(item.id) ? ApertureStyle.amber : ApertureStyle.bone,
+            .black.opacity(0.55)
+          )
+          .padding(8)
+      }
+    }
+    .contentShape(Rectangle())
+    .accessibilityHidden(true)
+
+    if selectionMode {
+      Button {
+        toggleSelection(item)
+      } label: {
+        card
+      }
+      .buttonStyle(.plain)
+      .accessibilityIdentifier("lab-item-\(item.id.uuidString)")
+      .accessibilityLabel("Select \(mediaNoun(for: item))")
+      .accessibilityValue(selectionValue(for: item))
+      .accessibilityHint("Double tap to select or deselect this \(mediaNoun(for: item))")
+    } else {
+      NavigationLink(value: item) { card }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("lab-item-\(item.id.uuidString)")
+        .accessibilityLabel("Open \(mediaNoun(for: item))")
+        .accessibilityValue(detailValue(for: item))
+        .accessibilityHint("Double tap to open this \(mediaNoun(for: item))")
+        .contextMenu {
+          Button {
+            Task { await model.setFavorite(item, isFavorite: !item.isFavorite) }
+          } label: {
+            Label(
+              item.isFavorite ? "Remove Favorite" : "Favorite",
+              systemImage: item.isFavorite ? "star.slash" : "star")
+          }
+          Button {
+            selectedIDs = [item.id]
+            showDeleteConfirmation = true
+          } label: {
+            Label("Delete", systemImage: "trash")
+          }
         }
     }
+  }
 
-    private var emptyState: some View {
-        VStack(spacing: 16) {
-            Image(systemName: "photo.on.rectangle.angled")
-                .font(.system(size: 48))
-                .foregroundStyle(.gray)
-            Text("No photos yet")
-                .font(.title3)
-                .foregroundStyle(.gray)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+  private var selectedItems: [MediaItem] {
+    model.items.filter { selectedIDs.contains($0.id) }
+  }
+
+  private var selectedMediaDescription: String {
+    let selected = selectedItems
+    guard selected.count > 1 else {
+      return selected.first.map(mediaNoun(for:)) ?? "media"
     }
+    let types = Set(selected.map { $0.mediaType })
+    return types.count == 1
+      ? "\(selected.count) \(selected.first.map(mediaNoun(for:)) ?? "media")s"
+      : "\(selected.count) media items"
+  }
 
-    private var galleryGrid: some View {
-        ScrollView {
-            LazyVGrid(columns: columns, spacing: 2) {
-                ForEach(photos, id: \.filename) { photo in
-                    NavigationLink(value: photo) {
-                        ThumbnailView(photo: photo)
-                            .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)
-                            .clipped()
-                            .aspectRatio(1, contentMode: .fit)
-                    }
-                }
-            }
-        }
-        .navigationDestination(for: PhotoMetadata.self) { photo in
-            PhotoDetailView(photo: photo) {
-                photos.removeAll { $0.filename == photo.filename }
-            }
-        }
+  private func mediaNoun(for item: MediaItem) -> String {
+    item.mediaType == .video ? "video" : "photo"
+  }
+
+  private func selectionValue(for item: MediaItem) -> String {
+    selectedIDs.contains(item.id) ? "Selected" : "Not selected"
+  }
+
+  private func detailValue(for item: MediaItem) -> String {
+    var parts: [String] = []
+    if item.processing.phase == .processing { parts.append("Developing") }
+    if item.processing.phase == .failed { parts.append("Development failed") }
+    if item.isFavorite { parts.append("Favorite") }
+    return parts.isEmpty ? "Ready" : parts.joined(separator: ", ")
+  }
+
+  private func toggleSelection(_ item: MediaItem) {
+    if selectedIDs.contains(item.id) {
+      selectedIDs.remove(item.id)
+    } else {
+      selectedIDs.insert(item.id)
     }
-}
-
-private final class ThumbnailCache {
-    static let shared = ThumbnailCache()
-
-    private let memoryCache = NSCache<NSString, UIImage>()
-    private let queue = OperationQueue()
-    private let cacheDirectory: URL
-
-    private init() {
-        let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
-        cacheDirectory = caches.appendingPathComponent("thumbnails", isDirectory: true)
-        try? FileManager.default.createDirectory(at: cacheDirectory, withIntermediateDirectories: true)
-        memoryCache.countLimit = 200
-        queue.maxConcurrentOperationCount = 3
-        queue.qualityOfService = .userInitiated
-    }
-
-    private func cacheFileURL(for filename: String) -> URL {
-        let id = (filename as NSString).deletingPathExtension
-        return cacheDirectory.appendingPathComponent("\(id).jpg")
-    }
-
-    func removeCachedThumbnail(for filename: String) {
-        let key = filename as NSString
-        memoryCache.removeObject(forKey: key)
-        try? FileManager.default.removeItem(at: cacheFileURL(for: filename))
-    }
-
-    func clearAll() {
-        memoryCache.removeAllObjects()
-        try? FileManager.default.removeItem(at: cacheDirectory)
-        try? FileManager.default.createDirectory(at: cacheDirectory, withIntermediateDirectories: true)
-    }
-
-    func loadThumbnail(for photo: PhotoMetadata, completion: @escaping (UIImage?) -> Void) {
-        let key = photo.filename as NSString
-
-        if let cached = memoryCache.object(forKey: key) {
-            completion(cached)
-            return
-        }
-
-        queue.addOperation { [self] in
-            let start = CFAbsoluteTimeGetCurrent()
-            let cachedFile = cacheFileURL(for: photo.filename)
-
-            // Try JPEG cache on disk
-            if let data = try? Data(contentsOf: cachedFile), let img = UIImage(data: data) {
-                let ms = (CFAbsoluteTimeGetCurrent() - start) * 1000
-                print("[Thumbnail] \(photo.filename) — cache hit: \(String(format: "%.1f", ms))ms")
-                self.memoryCache.setObject(img, forKey: key)
-                DispatchQueue.main.async { completion(img) }
-                return
-            }
-
-            // Decode from HEIC source and cache as JPEG
-            let sourceURL = PhotoStorage.photoURL(for: photo.filename)
-            let maxPixel = 150.0 * UIScreen.main.scale
-            let options: [CFString: Any] = [
-                kCGImageSourceCreateThumbnailFromImageAlways: true,
-                kCGImageSourceShouldCacheImmediately: true,
-                kCGImageSourceCreateThumbnailWithTransform: true,
-                kCGImageSourceThumbnailMaxPixelSize: maxPixel
-            ]
-            guard let source = CGImageSourceCreateWithURL(sourceURL as CFURL, nil),
-                  let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else {
-                DispatchQueue.main.async { completion(nil) }
-                return
-            }
-            let img = UIImage(cgImage: cgImage)
-
-            // Write JPEG cache to disk using CGImageDestination (avoids alpha warning)
-            if let dest = CGImageDestinationCreateWithURL(cachedFile as CFURL, UTType.jpeg.identifier as CFString, 1, nil) {
-                CGImageDestinationAddImage(dest, cgImage, [kCGImageDestinationLossyCompressionQuality: 0.8] as CFDictionary)
-                CGImageDestinationFinalize(dest)
-            }
-
-            let ms = (CFAbsoluteTimeGetCurrent() - start) * 1000
-            print("[Thumbnail] \(photo.filename) — decoded: \(String(format: "%.1f", ms))ms, size: \(cgImage.width)x\(cgImage.height)")
-            self.memoryCache.setObject(img, forKey: key)
-            DispatchQueue.main.async { completion(img) }
-        }
-    }
-}
-
-private struct ThumbnailView: View {
-    let photo: PhotoMetadata
-    @State private var image: UIImage?
-
-    var body: some View {
-        Group {
-            if let image {
-                Image(uiImage: image)
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-            } else {
-                Color.gray.opacity(0.3)
-            }
-        }
-        .onAppear {
-            guard image == nil else { return }
-            ThumbnailCache.shared.loadThumbnail(for: photo) { img in
-                image = img
-            }
-        }
-    }
+  }
 }

@@ -12,9 +12,57 @@
 		A10000010000000000000003 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A10000020000000000000003 /* Assets.xcassets */; };
 		A10000010000000000000004 /* CameraManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000020000000000000005 /* CameraManager.swift */; };
 		A10000010000000000000005 /* CameraPreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000020000000000000006 /* CameraPreview.swift */; };
-		A10000010000000000000006 /* PhotoStorage.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000020000000000000007 /* PhotoStorage.swift */; };
 		A10000010000000000000007 /* LabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000020000000000000008 /* LabView.swift */; };
 		A10000010000000000000008 /* PhotoDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000020000000000000009 /* PhotoDetailView.swift */; };
+		A10000010000000000000009 /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000020000000000000011 /* AppModel.swift */; };
+		A1000001000000000000000A /* CameraModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000020000000000000012 /* CameraModels.swift */; };
+		A1000001000000000000000B /* PhotosExporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000020000000000000013 /* PhotosExporter.swift */; };
+		A1000001000000000000000C /* ShareSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000020000000000000014 /* ShareSheet.swift */; };
+		A1000001000000000000000D /* ThumbnailService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000020000000000000015 /* ThumbnailService.swift */; };
+		A1000001000000000000000E /* AppSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000020000000000000016 /* AppSettings.swift */; };
+		A1000001000000000000000F /* DateStamp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000020000000000000017 /* DateStamp.swift */; };
+		A10000010000000000000010 /* FilmRecipe.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000020000000000000018 /* FilmRecipe.swift */; };
+		A10000010000000000000011 /* MediaModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000020000000000000019 /* MediaModels.swift */; };
+		A10000010000000000000012 /* SeededRandomNumberGenerator.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000002000000000000001A /* SeededRandomNumberGenerator.swift */; };
+		A10000010000000000000013 /* FilmProcessingTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000002000000000000001B /* FilmProcessingTypes.swift */; };
+		A10000010000000000000014 /* FilmProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000002000000000000001C /* FilmProcessor.swift */; };
+		A10000010000000000000015 /* MediaLibrary+Migration.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000002000000000000001D /* MediaLibrary+Migration.swift */; };
+		A10000010000000000000016 /* MediaLibrary+Recovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000002000000000000001E /* MediaLibrary+Recovery.swift */; };
+		A10000010000000000000017 /* MediaLibrary+Replacement.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000002000000000000001F /* MediaLibrary+Replacement.swift */; };
+		A10000010000000000000018 /* MediaLibrary+Validation.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000020000000000000020 /* MediaLibrary+Validation.swift */; };
+		A10000010000000000000019 /* MediaLibrary.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000020000000000000021 /* MediaLibrary.swift */; };
+		A1000001000000000000001A /* SettingsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000020000000000000022 /* SettingsStore.swift */; };
+		A1000001000000000000001B /* ThumbnailCacheKey.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000020000000000000023 /* ThumbnailCacheKey.swift */; };
+		A1000001000000000000001C /* ApertureStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000020000000000000024 /* ApertureStyle.swift */; };
+		A1000001000000000000001D /* FilmPickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000020000000000000025 /* FilmPickerView.swift */; };
+		A1000001000000000000001E /* MediaThumbnailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000020000000000000026 /* MediaThumbnailView.swift */; };
+		A1000001000000000000001F /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000020000000000000027 /* SettingsView.swift */; };
+		A10000010000000000000020 /* ZoomableImageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000020000000000000028 /* ZoomableImageView.swift */; };
+		A10000010000000000000021 /* CameraManager+VideoCapture.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000020000000000000029 /* CameraManager+VideoCapture.swift */; };
+		A10000010000000000000022 /* VideoProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000002000000000000002A /* VideoProcessor.swift */; };
+		A10000010000000000000023 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = A1000002000000000000002B /* PrivacyInfo.xcprivacy */; };
+		A10000010000000000000024 /* CameraManager+PhotoCapture.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000002000000000000002C /* CameraManager+PhotoCapture.swift */; };
+		A10000010000000000000025 /* CameraManager+FocusZoom.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000002000000000000002D /* CameraManager+FocusZoom.swift */; };
+		A10000010000000000000026 /* CameraManager+Session.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000002000000000000002E /* CameraManager+Session.swift */; };
+		A10000010000000000000027 /* AppModel+Capture.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000002000000000000002F /* AppModel+Capture.swift */; };
+		A10000010000000000000028 /* AppModel+Library.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000020000000000000030 /* AppModel+Library.swift */; };
+		A10000010000000000000029 /* CameraControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000020000000000000031 /* CameraControls.swift */; };
+		A1000001000000000000002A /* FilmProcessor+Effects.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000020000000000000032 /* FilmProcessor+Effects.swift */; };
+		A1000001000000000000002B /* FilmProcessor+Rasterization.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000020000000000000033 /* FilmProcessor+Rasterization.swift */; };
+		A1000001000000000000002C /* FilmProcessor+Overlays.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000020000000000000034 /* FilmProcessor+Overlays.swift */; };
+		A1000001000000000000002D /* MediaLibrary+Types.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000020000000000000035 /* MediaLibrary+Types.swift */; };
+		A1000001000000000000002E /* MediaLibrary+Persistence.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000020000000000000036 /* MediaLibrary+Persistence.swift */; };
+		B10000010000000000000001 /* CameraLogicTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000020000000000000001 /* CameraLogicTests.swift */; };
+		B10000010000000000000002 /* FilmProcessorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000020000000000000002 /* FilmProcessorTests.swift */; };
+		B10000010000000000000003 /* MediaLibraryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000020000000000000003 /* MediaLibraryTests.swift */; };
+		B10000010000000000000004 /* MediaModelsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000020000000000000004 /* MediaModelsTests.swift */; };
+		B10000010000000000000005 /* ReferenceFixtureTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000020000000000000005 /* ReferenceFixtureTests.swift */; };
+		B10000010000000000000006 /* SettingsAndCacheTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000020000000000000006 /* SettingsAndCacheTests.swift */; };
+		B10000010000000000000007 /* day-portrait.png in Resources */ = {isa = PBXBuildFile; fileRef = B10000020000000000000007 /* day-portrait.png */; };
+		B10000010000000000000008 /* hdr-still-life.png in Resources */ = {isa = PBXBuildFile; fileRef = B10000020000000000000008 /* hdr-still-life.png */; };
+		B10000010000000000000009 /* night-flash.png in Resources */ = {isa = PBXBuildFile; fileRef = B10000020000000000000009 /* night-flash.png */; };
+		B1000001000000000000000A /* VideoProcessorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000002000000000000000B /* VideoProcessorTests.swift */; };
+		C10000010000000000000001 /* ApertureUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10000020000000000000001 /* ApertureUITests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -24,14 +72,78 @@
 		A10000020000000000000004 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		A10000020000000000000005 /* CameraManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraManager.swift; sourceTree = "<group>"; };
 		A10000020000000000000006 /* CameraPreview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraPreview.swift; sourceTree = "<group>"; };
-		A10000020000000000000007 /* PhotoStorage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoStorage.swift; sourceTree = "<group>"; };
 		A10000020000000000000008 /* LabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LabView.swift; sourceTree = "<group>"; };
 		A10000020000000000000009 /* PhotoDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoDetailView.swift; sourceTree = "<group>"; };
 		A10000020000000000000010 /* Aperture.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Aperture.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A10000020000000000000011 /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "App/AppModel.swift"; sourceTree = "<group>"; };
+		A10000020000000000000012 /* CameraModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Camera/CameraModels.swift"; sourceTree = "<group>"; };
+		A10000020000000000000013 /* PhotosExporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Integration/PhotosExporter.swift"; sourceTree = "<group>"; };
+		A10000020000000000000014 /* ShareSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Integration/ShareSheet.swift"; sourceTree = "<group>"; };
+		A10000020000000000000015 /* ThumbnailService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Integration/ThumbnailService.swift"; sourceTree = "<group>"; };
+		A10000020000000000000016 /* AppSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Models/AppSettings.swift"; sourceTree = "<group>"; };
+		A10000020000000000000017 /* DateStamp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Models/DateStamp.swift"; sourceTree = "<group>"; };
+		A10000020000000000000018 /* FilmRecipe.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Models/FilmRecipe.swift"; sourceTree = "<group>"; };
+		A10000020000000000000019 /* MediaModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Models/MediaModels.swift"; sourceTree = "<group>"; };
+		A1000002000000000000001A /* SeededRandomNumberGenerator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Models/SeededRandomNumberGenerator.swift"; sourceTree = "<group>"; };
+		A1000002000000000000001B /* FilmProcessingTypes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Processing/FilmProcessingTypes.swift"; sourceTree = "<group>"; };
+		A1000002000000000000001C /* FilmProcessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Processing/FilmProcessor.swift"; sourceTree = "<group>"; };
+		A1000002000000000000001D /* MediaLibrary+Migration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Storage/MediaLibrary+Migration.swift"; sourceTree = "<group>"; };
+		A1000002000000000000001E /* MediaLibrary+Recovery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Storage/MediaLibrary+Recovery.swift"; sourceTree = "<group>"; };
+		A1000002000000000000001F /* MediaLibrary+Replacement.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Storage/MediaLibrary+Replacement.swift"; sourceTree = "<group>"; };
+		A10000020000000000000020 /* MediaLibrary+Validation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Storage/MediaLibrary+Validation.swift"; sourceTree = "<group>"; };
+		A10000020000000000000021 /* MediaLibrary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Storage/MediaLibrary.swift"; sourceTree = "<group>"; };
+		A10000020000000000000022 /* SettingsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Storage/SettingsStore.swift"; sourceTree = "<group>"; };
+		A10000020000000000000023 /* ThumbnailCacheKey.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Storage/ThumbnailCacheKey.swift"; sourceTree = "<group>"; };
+		A10000020000000000000024 /* ApertureStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "UI/ApertureStyle.swift"; sourceTree = "<group>"; };
+		A10000020000000000000025 /* FilmPickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "UI/FilmPickerView.swift"; sourceTree = "<group>"; };
+		A10000020000000000000026 /* MediaThumbnailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "UI/MediaThumbnailView.swift"; sourceTree = "<group>"; };
+		A10000020000000000000027 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "UI/SettingsView.swift"; sourceTree = "<group>"; };
+		A10000020000000000000028 /* ZoomableImageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "UI/ZoomableImageView.swift"; sourceTree = "<group>"; };
+		A10000020000000000000029 /* CameraManager+VideoCapture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Camera/CameraManager+VideoCapture.swift"; sourceTree = "<group>"; };
+		A1000002000000000000002A /* VideoProcessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Processing/VideoProcessor.swift"; sourceTree = "<group>"; };
+		A1000002000000000000002B /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		A1000002000000000000002C /* CameraManager+PhotoCapture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Camera/CameraManager+PhotoCapture.swift"; sourceTree = "<group>"; };
+		A1000002000000000000002D /* CameraManager+FocusZoom.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Camera/CameraManager+FocusZoom.swift"; sourceTree = "<group>"; };
+		A1000002000000000000002E /* CameraManager+Session.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Camera/CameraManager+Session.swift"; sourceTree = "<group>"; };
+		A1000002000000000000002F /* AppModel+Capture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "App/AppModel+Capture.swift"; sourceTree = "<group>"; };
+		A10000020000000000000030 /* AppModel+Library.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "App/AppModel+Library.swift"; sourceTree = "<group>"; };
+		A10000020000000000000031 /* CameraControls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "UI/CameraControls.swift"; sourceTree = "<group>"; };
+		A10000020000000000000032 /* FilmProcessor+Effects.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Processing/FilmProcessor+Effects.swift"; sourceTree = "<group>"; };
+		A10000020000000000000033 /* FilmProcessor+Rasterization.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Processing/FilmProcessor+Rasterization.swift"; sourceTree = "<group>"; };
+		A10000020000000000000034 /* FilmProcessor+Overlays.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Processing/FilmProcessor+Overlays.swift"; sourceTree = "<group>"; };
+		A10000020000000000000035 /* MediaLibrary+Types.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Storage/MediaLibrary+Types.swift"; sourceTree = "<group>"; };
+		A10000020000000000000036 /* MediaLibrary+Persistence.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Storage/MediaLibrary+Persistence.swift"; sourceTree = "<group>"; };
+		B10000020000000000000001 /* CameraLogicTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraLogicTests.swift; sourceTree = "<group>"; };
+		B10000020000000000000002 /* FilmProcessorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FilmProcessorTests.swift; sourceTree = "<group>"; };
+		B10000020000000000000003 /* MediaLibraryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaLibraryTests.swift; sourceTree = "<group>"; };
+		B10000020000000000000004 /* MediaModelsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaModelsTests.swift; sourceTree = "<group>"; };
+		B10000020000000000000005 /* ReferenceFixtureTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReferenceFixtureTests.swift; sourceTree = "<group>"; };
+		B10000020000000000000006 /* SettingsAndCacheTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsAndCacheTests.swift; sourceTree = "<group>"; };
+		B10000020000000000000007 /* day-portrait.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = day-portrait.png; sourceTree = "<group>"; };
+		B10000020000000000000008 /* hdr-still-life.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = hdr-still-life.png; sourceTree = "<group>"; };
+		B10000020000000000000009 /* night-flash.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = night-flash.png; sourceTree = "<group>"; };
+		B10000020000000000000010 /* ApertureTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ApertureTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		B1000002000000000000000B /* VideoProcessorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoProcessorTests.swift; sourceTree = "<group>"; };
+		C10000020000000000000001 /* ApertureUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApertureUITests.swift; sourceTree = "<group>"; };
+		C10000020000000000000002 /* ApertureUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ApertureUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		A10000030000000000000001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B10000030000000000000001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		C10000030000000000000001 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -45,6 +157,8 @@
 			isa = PBXGroup;
 			children = (
 				A10000040000000000000002 /* Aperture */,
+				B10000040000000000000001 /* ApertureTests */,
+				C10000040000000000000001 /* ApertureUITests */,
 				A10000040000000000000003 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -53,14 +167,51 @@
 			isa = PBXGroup;
 			children = (
 				A10000020000000000000001 /* ApertureApp.swift */,
+				A1000002000000000000002F /* AppModel+Capture.swift */,
+				A10000020000000000000030 /* AppModel+Library.swift */,
+				A10000020000000000000011 /* AppModel.swift */,
 				A10000020000000000000002 /* ContentView.swift */,
+				A10000020000000000000012 /* CameraModels.swift */,
 				A10000020000000000000005 /* CameraManager.swift */,
+				A10000020000000000000029 /* CameraManager+VideoCapture.swift */,
+				A1000002000000000000002C /* CameraManager+PhotoCapture.swift */,
+				A1000002000000000000002D /* CameraManager+FocusZoom.swift */,
+				A1000002000000000000002E /* CameraManager+Session.swift */,
 				A10000020000000000000006 /* CameraPreview.swift */,
-				A10000020000000000000007 /* PhotoStorage.swift */,
 				A10000020000000000000008 /* LabView.swift */,
 				A10000020000000000000009 /* PhotoDetailView.swift */,
+				A10000020000000000000013 /* PhotosExporter.swift */,
+				A10000020000000000000014 /* ShareSheet.swift */,
+				A10000020000000000000015 /* ThumbnailService.swift */,
+				A10000020000000000000016 /* AppSettings.swift */,
+				A10000020000000000000017 /* DateStamp.swift */,
+				A10000020000000000000018 /* FilmRecipe.swift */,
+				A10000020000000000000019 /* MediaModels.swift */,
+				A1000002000000000000001A /* SeededRandomNumberGenerator.swift */,
+				A1000002000000000000001B /* FilmProcessingTypes.swift */,
+				A1000002000000000000001C /* FilmProcessor.swift */,
+				A10000020000000000000032 /* FilmProcessor+Effects.swift */,
+				A10000020000000000000033 /* FilmProcessor+Rasterization.swift */,
+				A10000020000000000000034 /* FilmProcessor+Overlays.swift */,
+				A1000002000000000000002A /* VideoProcessor.swift */,
+				A1000002000000000000001D /* MediaLibrary+Migration.swift */,
+				A1000002000000000000001E /* MediaLibrary+Recovery.swift */,
+				A1000002000000000000001F /* MediaLibrary+Replacement.swift */,
+				A10000020000000000000020 /* MediaLibrary+Validation.swift */,
+				A10000020000000000000035 /* MediaLibrary+Types.swift */,
+				A10000020000000000000036 /* MediaLibrary+Persistence.swift */,
+				A10000020000000000000021 /* MediaLibrary.swift */,
+				A10000020000000000000022 /* SettingsStore.swift */,
+				A10000020000000000000023 /* ThumbnailCacheKey.swift */,
+				A10000020000000000000024 /* ApertureStyle.swift */,
+				A10000020000000000000025 /* FilmPickerView.swift */,
+				A10000020000000000000026 /* MediaThumbnailView.swift */,
+				A10000020000000000000027 /* SettingsView.swift */,
+				A10000020000000000000031 /* CameraControls.swift */,
+				A10000020000000000000028 /* ZoomableImageView.swift */,
 				A10000020000000000000003 /* Assets.xcassets */,
 				A10000020000000000000004 /* Info.plist */,
+				A1000002000000000000002B /* PrivacyInfo.xcprivacy */,
 			);
 			path = Aperture;
 			sourceTree = "<group>";
@@ -69,8 +220,43 @@
 			isa = PBXGroup;
 			children = (
 				A10000020000000000000010 /* Aperture.app */,
+				B10000020000000000000010 /* ApertureTests.xctest */,
+				C10000020000000000000002 /* ApertureUITests.xctest */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		B10000040000000000000001 /* ApertureTests */ = {
+			isa = PBXGroup;
+			children = (
+				B10000020000000000000001 /* CameraLogicTests.swift */,
+				B10000020000000000000002 /* FilmProcessorTests.swift */,
+				B10000020000000000000003 /* MediaLibraryTests.swift */,
+				B10000020000000000000004 /* MediaModelsTests.swift */,
+				B10000020000000000000005 /* ReferenceFixtureTests.swift */,
+				B10000020000000000000006 /* SettingsAndCacheTests.swift */,
+				B1000002000000000000000B /* VideoProcessorTests.swift */,
+				B10000040000000000000002 /* Fixtures */,
+			);
+			path = ApertureTests;
+			sourceTree = "<group>";
+		};
+		B10000040000000000000002 /* Fixtures */ = {
+			isa = PBXGroup;
+			children = (
+				B10000020000000000000007 /* day-portrait.png */,
+				B10000020000000000000008 /* hdr-still-life.png */,
+				B10000020000000000000009 /* night-flash.png */,
+			);
+			path = Fixtures;
+			sourceTree = "<group>";
+		};
+		C10000040000000000000001 /* ApertureUITests */ = {
+			isa = PBXGroup;
+			children = (
+				C10000020000000000000001 /* ApertureUITests.swift */,
+			);
+			path = ApertureUITests;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -93,7 +279,73 @@
 			productReference = A10000020000000000000010 /* Aperture.app */;
 			productType = "com.apple.product-type.application";
 		};
+		B10000050000000000000001 /* ApertureTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = B10000070000000000000001 /* Build configuration list for PBXNativeTarget "ApertureTests" */;
+			buildPhases = (
+				B10000060000000000000001 /* Sources */,
+				B10000030000000000000001 /* Frameworks */,
+				B10000060000000000000002 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				B100000D0000000000000001 /* PBXTargetDependency */,
+			);
+			name = ApertureTests;
+			productName = ApertureTests;
+			productReference = B10000020000000000000010 /* ApertureTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		C10000050000000000000001 /* ApertureUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = C10000070000000000000001 /* Build configuration list for PBXNativeTarget "ApertureUITests" */;
+			buildPhases = (
+				C10000060000000000000001 /* Sources */,
+				C10000030000000000000001 /* Frameworks */,
+				C10000060000000000000002 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				C100000D0000000000000001 /* PBXTargetDependency */,
+			);
+			name = ApertureUITests;
+			productName = ApertureUITests;
+			productReference = C10000020000000000000002 /* ApertureUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
 /* End PBXNativeTarget section */
+
+/* Begin PBXContainerItemProxy section */
+		B100000C0000000000000001 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A10000080000000000000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A10000050000000000000001;
+			remoteInfo = Aperture;
+		};
+		C100000C0000000000000001 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A10000080000000000000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A10000050000000000000001;
+			remoteInfo = Aperture;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXTargetDependency section */
+		B100000D0000000000000001 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = A10000050000000000000001 /* Aperture */;
+			targetProxy = B100000C0000000000000001 /* PBXContainerItemProxy */;
+		};
+		C100000D0000000000000001 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = A10000050000000000000001 /* Aperture */;
+			targetProxy = C100000C0000000000000001 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin PBXProject section */
 		A10000080000000000000001 /* Project object */ = {
@@ -105,6 +357,14 @@
 				TargetAttributes = {
 					A10000050000000000000001 = {
 						CreatedOnToolsVersion = 16.0;
+					};
+					B10000050000000000000001 = {
+						CreatedOnToolsVersion = 16.0;
+						TestTargetID = A10000050000000000000001;
+					};
+					C10000050000000000000001 = {
+						CreatedOnToolsVersion = 16.0;
+						TestTargetID = A10000050000000000000001;
 					};
 				};
 			};
@@ -122,6 +382,8 @@
 			projectRoot = "";
 			targets = (
 				A10000050000000000000001 /* Aperture */,
+				B10000050000000000000001 /* ApertureTests */,
+				C10000050000000000000001 /* ApertureUITests */,
 			);
 		};
 /* End PBXProject section */
@@ -132,6 +394,24 @@
 			buildActionMask = 2147483647;
 			files = (
 				A10000010000000000000003 /* Assets.xcassets in Resources */,
+				A10000010000000000000023 /* PrivacyInfo.xcprivacy in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B10000060000000000000002 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B10000010000000000000007 /* day-portrait.png in Resources */,
+				B10000010000000000000008 /* hdr-still-life.png in Resources */,
+				B10000010000000000000009 /* night-flash.png in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		C10000060000000000000002 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -146,9 +426,67 @@
 				A10000010000000000000002 /* ContentView.swift in Sources */,
 				A10000010000000000000004 /* CameraManager.swift in Sources */,
 				A10000010000000000000005 /* CameraPreview.swift in Sources */,
-				A10000010000000000000006 /* PhotoStorage.swift in Sources */,
 				A10000010000000000000007 /* LabView.swift in Sources */,
 				A10000010000000000000008 /* PhotoDetailView.swift in Sources */,
+				A10000010000000000000009 /* AppModel.swift in Sources */,
+				A1000001000000000000000A /* CameraModels.swift in Sources */,
+				A1000001000000000000000B /* PhotosExporter.swift in Sources */,
+				A1000001000000000000000C /* ShareSheet.swift in Sources */,
+				A1000001000000000000000D /* ThumbnailService.swift in Sources */,
+				A1000001000000000000000E /* AppSettings.swift in Sources */,
+				A1000001000000000000000F /* DateStamp.swift in Sources */,
+				A10000010000000000000010 /* FilmRecipe.swift in Sources */,
+				A10000010000000000000011 /* MediaModels.swift in Sources */,
+				A10000010000000000000012 /* SeededRandomNumberGenerator.swift in Sources */,
+				A10000010000000000000013 /* FilmProcessingTypes.swift in Sources */,
+				A10000010000000000000014 /* FilmProcessor.swift in Sources */,
+				A10000010000000000000015 /* MediaLibrary+Migration.swift in Sources */,
+				A10000010000000000000016 /* MediaLibrary+Recovery.swift in Sources */,
+				A10000010000000000000017 /* MediaLibrary+Replacement.swift in Sources */,
+				A10000010000000000000018 /* MediaLibrary+Validation.swift in Sources */,
+				A10000010000000000000019 /* MediaLibrary.swift in Sources */,
+				A1000001000000000000001A /* SettingsStore.swift in Sources */,
+				A1000001000000000000001B /* ThumbnailCacheKey.swift in Sources */,
+				A1000001000000000000001C /* ApertureStyle.swift in Sources */,
+				A1000001000000000000001D /* FilmPickerView.swift in Sources */,
+				A1000001000000000000001E /* MediaThumbnailView.swift in Sources */,
+				A1000001000000000000001F /* SettingsView.swift in Sources */,
+				A10000010000000000000020 /* ZoomableImageView.swift in Sources */,
+				A10000010000000000000021 /* CameraManager+VideoCapture.swift in Sources */,
+				A10000010000000000000024 /* CameraManager+PhotoCapture.swift in Sources */,
+				A10000010000000000000025 /* CameraManager+FocusZoom.swift in Sources */,
+				A10000010000000000000026 /* CameraManager+Session.swift in Sources */,
+				A10000010000000000000027 /* AppModel+Capture.swift in Sources */,
+				A10000010000000000000028 /* AppModel+Library.swift in Sources */,
+				A10000010000000000000029 /* CameraControls.swift in Sources */,
+				A1000001000000000000002A /* FilmProcessor+Effects.swift in Sources */,
+				A1000001000000000000002B /* FilmProcessor+Rasterization.swift in Sources */,
+				A1000001000000000000002C /* FilmProcessor+Overlays.swift in Sources */,
+				A1000001000000000000002D /* MediaLibrary+Types.swift in Sources */,
+				A1000001000000000000002E /* MediaLibrary+Persistence.swift in Sources */,
+				A10000010000000000000022 /* VideoProcessor.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B10000060000000000000001 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B10000010000000000000001 /* CameraLogicTests.swift in Sources */,
+				B10000010000000000000002 /* FilmProcessorTests.swift in Sources */,
+				B10000010000000000000003 /* MediaLibraryTests.swift in Sources */,
+				B10000010000000000000004 /* MediaModelsTests.swift in Sources */,
+				B10000010000000000000005 /* ReferenceFixtureTests.swift in Sources */,
+				B10000010000000000000006 /* SettingsAndCacheTests.swift in Sources */,
+				B1000001000000000000000A /* VideoProcessorTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		C10000060000000000000001 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				C10000010000000000000001 /* ApertureUITests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -299,8 +637,9 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.georgenijo.Aperture;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_STRICT_CONCURRENCY = complete;
 				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
+				TARGETED_DEVICE_FAMILY = 1;
 			};
 			name = Debug;
 		};
@@ -329,8 +668,79 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.georgenijo.Aperture;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_STRICT_CONCURRENCY = complete;
 				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
+		B10000090000000000000001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = P2U3P8B923;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.georgenijo.ApertureTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Aperture.app/Aperture";
+			};
+			name = Debug;
+		};
+		B10000090000000000000002 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = P2U3P8B923;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.georgenijo.ApertureTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Aperture.app/Aperture";
+			};
+			name = Release;
+		};
+		C10000090000000000000001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = P2U3P8B923;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.georgenijo.ApertureUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				TEST_TARGET_NAME = Aperture;
+			};
+			name = Debug;
+		};
+		C10000090000000000000002 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = P2U3P8B923;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.georgenijo.ApertureUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				TEST_TARGET_NAME = Aperture;
 			};
 			name = Release;
 		};
@@ -351,6 +761,24 @@
 			buildConfigurations = (
 				A10000090000000000000001 /* Debug */,
 				A10000090000000000000002 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		B10000070000000000000001 /* Build configuration list for PBXNativeTarget "ApertureTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B10000090000000000000001 /* Debug */,
+				B10000090000000000000002 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		C10000070000000000000001 /* Build configuration list for PBXNativeTarget "ApertureUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				C10000090000000000000001 /* Debug */,
+				C10000090000000000000002 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
