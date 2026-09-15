@@ -1,54 +1,38 @@
-# CLAUDE.md
+# Aperture contributor notes
 
-Native iOS camera app with vintage film emulation. Swift + SwiftUI, AVFoundation camera, Core Image + Metal processing pipeline. Film stocks, light leaks, grain, date stamps — the Huji aesthetic with pro camera controls.
+Aperture is a native Swift/SwiftUI iOS 17+ iPhone camera for stills and short films. Apple frameworks own the runtime: AVFoundation capture/movie recording, Core Image/Image I/O development, FileManager storage, Photos add-only export, and XCTest/XCUITest verification. There are no third-party packages.
 
 ## Commands
 
-```bash
-# Build (CLI, no signing — for verification)
-xcodebuild -project Aperture.xcodeproj -target Aperture -sdk iphoneos -configuration Debug build CODE_SIGN_IDENTITY=- CODE_SIGNING_ALLOWED=NO 2>&1 | tail -5
-
-# Deploy to device — open Aperture.xcodeproj in Xcode, select your iPhone, hit Run
+```sh
+xcodebuild -project Aperture.xcodeproj -scheme Aperture -sdk iphonesimulator -configuration Debug build
+xcodebuild -project Aperture.xcodeproj -scheme Aperture -sdk iphonesimulator -destination 'platform=iOS Simulator,name=iPhone 16 Pro' test
+xcodebuild -project Aperture.xcodeproj -scheme Aperture -sdk iphoneos -configuration Debug build CODE_SIGN_IDENTITY=- CODE_SIGNING_ALLOWED=NO
 ```
 
-## Docs
+The last command is an unsigned compile check; running the camera requires a signed physical-device build. The project has `Aperture`, `ApertureTests`, and `ApertureUITests` targets and one shared `Aperture` scheme.
 
-Read these before working on a feature:
+## Where code lives
 
-- **[film-camera-app-architecture.md](film-camera-app-architecture.md)** — Full technical architecture: camera engine, processing pipeline, storage, UI, development phases
-- **[huji-cam-research-and-build-guide.md](huji-cam-research-and-build-guide.md)** — Huji reverse-engineering, competitive landscape, image processing details, tech stack analysis
+- `Aperture/CameraManager.swift` and `Aperture/Camera/`: serialized AVFoundation session/configuration, photo/movie delegates, microphone input, capabilities, zoom/lens mapping, focus/exposure, interruptions, and pressure handling.
+- `Aperture/App/`: `AppModel`, the main actor boundary between camera, storage, processing, settings, thumbnails, and export.
+- `Aperture/Processing/`: versioned `FilmRecipe` values and deterministic Core Image rendering.
+- `Aperture/Storage/`: actor-isolated media library, atomic staging/commit/replacement/deletion, recovery, legacy migration and its durable deletion ledger, settings, and cache keys.
+- `Aperture/UI/`, root SwiftUI views, and `CameraPreview.swift`: camera, Lab, detail, settings, and styling.
+- `ApertureTests/` and `ApertureUITests/`: unit/integration and permission-denied/empty-library UI coverage.
 
-## File Map
+## Invariants
 
-### App (`Aperture/`)
+- All AVFoundation graph, device, output, connection, and capture mutations use the dedicated user-initiated camera queue. Published state is delivered to the main actor.
+- A capture is staged and committed before Core Image development starts. The UI can therefore show a pending item and recover/retry after interruption.
+- Rendering consumes the persisted applied recipe (including seed, date-stamp text, and timezone), never current settings/date/random state. Reuse the singleton `CIContext`; do not create one per image.
+- `Photo Quality` is resolved at capture time into the recipe’s persisted JPEG compression quality; re-development must use that snapshot rather than current Settings.
+- On launch, pending/processing items are marked interrupted and resumed one at a time in capture order, yielding between items to bound CPU, memory, and disk pressure.
+- Media paths are validated relative paths under the library root. Writes use temporary/staging locations and atomic metadata writes.
+- Legacy migration records deleted imported identifiers in `legacy-deletions.json` with an atomic write. If that ledger is missing, invalid, or cannot be preserved for recovery, migration pauses without touching legacy files; deleting an imported item is also refused until the ledger is available again.
+- Processed-asset replacement publishes a new asset and metadata before removing superseded files. If metadata rollback is uncertain, the new media is retained for launch-time reconciliation; reconciliation removes orphans only after every metadata-referenced asset is confirmed present.
+- Derived thumbnails use item-prefixed, discoverable filenames. The `.aperture-thumbnail-version` marker invalidates the complete disk cache when the renderer/schema token changes; per-item invalidation works across relaunches.
+- Video is real shipped code: `AVCaptureMovieFileOutput` records a microphone-backed `.mov` to a temporary URL, capped at 60 seconds; `VideoProcessor` develops it before the processed asset is committed.
+- The target is iPhone-only (`TARGETED_DEVICE_FAMILY = 1`); do not describe iPad support.
 
-| File | Purpose |
-|------|---------|
-| `ApertureApp.swift` | App entry point, SwiftUI lifecycle |
-| `ContentView.swift` | Root view — will wire camera and gallery |
-| `Assets.xcassets` | Asset catalog (app icon, accent color) |
-| `Info.plist` | Camera permission (NSCameraUsageDescription) |
-
-## Architecture Decisions
-
-- **iOS 17+** — enables latest SwiftUI and AVFoundation APIs
-- **SwiftUI** for app shell, **UIKit** (via UIViewRepresentable) for camera preview layer
-- **AVFoundation** for camera capture — AVCaptureSession, AVCapturePhotoOutput
-- **Core Image + Metal** for the film processing pipeline (future)
-- **App sandbox storage** for photos — no Photos framework dependency until export feature
-- **No third-party dependencies** — Apple frameworks only unless we hit a wall
-
-## iOS Gotchas
-
-- Camera only works on a real device — the simulator has no camera hardware
-- `CIContext` is expensive to create (~50ms) — create once, reuse everywhere
-- `AVCaptureSession` configuration changes must be wrapped in `beginConfiguration()`/`commitConfiguration()`
-- Always query `AVCaptureDevice.DiscoverySession` for available lenses — not all iPhones have the same cameras
-- High-res photos can be 12-48MP — use `CIImage` (lazy evaluation) through the pipeline, only render to `CGImage` at the final output step
-
-## Project Config
-
-- **Bundle ID**: `com.georgenijo.Aperture`
-- **Team**: `P2U3P8B923`
-- **Deployment target**: iOS 17.0
-- **Signing**: Automatic
+See [the implemented architecture](film-camera-app-architecture.md) and [release gates](docs/release-engineering.md) before changing capture or storage behavior.
