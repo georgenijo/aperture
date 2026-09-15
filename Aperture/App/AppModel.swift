@@ -294,24 +294,34 @@ final class AppModel: ObservableObject {
     )
   }
 
-  private func recoverInterruptedItems(_ candidates: [MediaItem]) async {
+  /// Launch recovery re-develops an item at most this many times. Beyond it
+  /// the item stays failed-but-recoverable for a manual retry, so a
+  /// development that crashes deterministically cannot become a launch loop.
+  static let maximumAutomaticRecoveryAttempts = 3
+
+  func recoverInterruptedItems(_ candidates: [MediaItem]) async {
     // Sequential recovery bounds CPU, memory, and disk pressure while
     // allowing the main actor to service UI between each await.
     for item in candidates
     where item.processing.phase == .pending || item.processing.phase == .processing {
       guard !Task.isCancelled else { return }
       do {
-        let previousAttempts = item.processing.failure?.attemptCount ?? 0
+        // A pending item never started; an interrupted one already counted
+        // the attempt it was in when the app died.
+        let attemptCount = item.processing.attemptCount
+        let exhausted = attemptCount >= Self.maximumAutomaticRecoveryAttempts
         let interrupted = MediaProcessingFailure(
           code: .interrupted,
-          message: "Development was interrupted. Aperture will resume it from the saved source.",
+          message: exhausted
+            ? "Development was interrupted \(attemptCount) times. Tap Retry to try again."
+            : "Development was interrupted. Aperture will resume it from the saved source.",
           isRecoverable: true,
-          attemptCount: previousAttempts + 1
+          attemptCount: attemptCount
         )
         try await mediaLibrary.updateProcessing(.failed(interrupted), for: item.id)
         await refresh()
 
-        guard try await existingOriginalOrProcessedURL(for: item) != nil else {
+        guard !exhausted, try await existingOriginalOrProcessedURL(for: item) != nil else {
           continue
         }
         let current = (try? await mediaLibrary.items())?.first(where: { $0.id == item.id }) ?? item

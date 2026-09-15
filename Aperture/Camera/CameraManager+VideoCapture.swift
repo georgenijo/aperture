@@ -293,10 +293,8 @@ extension CameraManager {
       let callback = recordingCompletion ?? onVideoCaptured
       let snapshot = recordingSnapshot
       let startedAt = recordingStartedAt
-      let duration = max(
-        0,
-        movieOutput.recordedDuration.seconds.isFinite
-          ? movieOutput.recordedDuration.seconds : Date().timeIntervalSince(startedAt ?? Date()))
+      let duration = CameraRecordingLogic.completedDuration(
+        recordedSeconds: movieOutput.recordedDuration.seconds, startedAt: startedAt)
       recordingCompletion = nil
       recordingSnapshot = nil
       recordingStartedAt = nil
@@ -354,6 +352,9 @@ extension CameraManager {
       if shouldRebuild {
         rebuildAfterRecordingFinishes = false
         rebuildGraphAfterMediaServicesResetOnQueue()
+      } else if shouldStopSession {
+        // The interruption that forced this stop may already be over.
+        resumeSessionIfWantedOnQueue()
       }
     }
   }

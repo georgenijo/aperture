@@ -168,4 +168,31 @@ final class MediaModelsTests: XCTestCase {
       "1998 02 28"
     )
   }
+
+  func testProcessingAttemptCountSurvivesEveryPhaseAndLegacyManifests() throws {
+    let encoder = ApertureJSON.makeEncoder()
+    let decoder = ApertureJSON.makeDecoder()
+
+    let processing = MediaProcessingState.processing(attemptCount: 2)
+    XCTAssertEqual(processing.attemptCount, 2)
+    XCTAssertEqual(
+      try decoder.decode(MediaProcessingState.self, from: try encoder.encode(processing)),
+      processing)
+    XCTAssertEqual(processing.nextAttempt, .processing(attemptCount: 3))
+    XCTAssertEqual(MediaProcessingState.pending.nextAttempt, .processing(attemptCount: 1))
+
+    let failure = MediaProcessingFailure(
+      code: .renderFailed, message: "boom", isRecoverable: true, attemptCount: 3)
+    XCTAssertEqual(MediaProcessingState.failed(failure).attemptCount, 3)
+
+    let legacyProcessing = Data(#"{"phase":"processing"}"#.utf8)
+    XCTAssertEqual(
+      try decoder.decode(MediaProcessingState.self, from: legacyProcessing),
+      .processing(attemptCount: 0))
+    let legacyFailedJSON = Data(
+      #"{"phase":"failed","failure":{"code":"interrupted","message":"m","isRecoverable":true,"attemptCount":3}}"#
+        .utf8)
+    XCTAssertEqual(
+      try decoder.decode(MediaProcessingState.self, from: legacyFailedJSON).attemptCount, 3)
+  }
 }

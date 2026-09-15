@@ -74,7 +74,7 @@ extension AppModel {
           original: context.preserveOriginal ? source : nil
         )
         await self.refresh()
-        try await self.mediaLibrary.updateProcessing(.processing, for: item.id)
+        try await self.mediaLibrary.updateProcessing(item.processing.nextAttempt, for: item.id)
         await self.refresh()
         await self.developVideo(item: item, autoSaveToPhotos: context.autoSaveToPhotos)
       } catch {
@@ -126,7 +126,7 @@ extension AppModel {
           original: original
         )
         await self.refresh()
-        try await self.mediaLibrary.updateProcessing(.processing, for: item.id)
+        try await self.mediaLibrary.updateProcessing(item.processing.nextAttempt, for: item.id)
         await self.refresh()
         try await self.develop(item: item, sourceData: captured.data)
       } catch {
@@ -145,7 +145,7 @@ extension AppModel {
           throw MediaLibraryError.fileOperation(
             operation: "read", path: item.id.uuidString, details: "The source file is missing.")
         }
-        try await mediaLibrary.updateProcessing(.processing, for: item.id)
+        try await mediaLibrary.updateProcessing(item.processing.nextAttempt, for: item.id)
         await refresh()
         await developVideo(item: item, autoSaveToPhotos: settings.autoSaveToPhotos)
       } catch {
@@ -164,7 +164,7 @@ extension AppModel {
       let sourceData = try await Task.detached(priority: .userInitiated) {
         try Data(contentsOf: sourceURL)
       }.value
-      try await mediaLibrary.updateProcessing(.processing, for: item.id)
+      try await mediaLibrary.updateProcessing(item.processing.nextAttempt, for: item.id)
       await refresh()
       try await develop(item: item, sourceData: sourceData)
     } catch {
@@ -280,18 +280,20 @@ extension AppModel {
   }
 
   private func markProcessingFailed(_ id: UUID, error: Error) async {
-    let previousAttempt: Int
+    // The attempt that just failed is the one recorded on the item's
+    // processing state; a failure never starts a new attempt.
+    let attemptCount: Int
     if let item = try? await mediaLibrary.items(), let current = item.first(where: { $0.id == id })
     {
-      previousAttempt = current.processing.failure?.attemptCount ?? 0
+      attemptCount = max(1, current.processing.attemptCount)
     } else {
-      previousAttempt = 0
+      attemptCount = 1
     }
     let failure = MediaProcessingFailure(
       code: Self.processingFailureCode(for: error),
       message: error.localizedDescription,
       isRecoverable: true,
-      attemptCount: previousAttempt + 1
+      attemptCount: attemptCount
     )
     try? await mediaLibrary.updateProcessing(.failed(failure), for: id)
   }

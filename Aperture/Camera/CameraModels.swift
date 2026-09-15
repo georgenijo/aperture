@@ -86,6 +86,39 @@ enum CameraFlashLogic {
     let avMode = supportedModes.contains(requested) ? requested : .off
     return CameraFlashDecision(avMode: avMode, metadataMode: avMode, usesScreenFlash: false)
   }
+
+  /// The modes the picker may offer. `.on` is only listed where `decision`
+  /// can honor it: a hardware flash, or the front camera's screen flash.
+  static func availableModes(hasFlash: Bool, position: CameraPosition) -> [CameraFlashMode] {
+    if hasFlash { return CameraFlashMode.allCases }
+    return position == .front ? [.off, .on] : [.off]
+  }
+}
+
+enum CameraRecordingLogic {
+  /// `AVCaptureFileOutput.recordedDuration` reports zero once the file has
+  /// been closed, which is when the finish delegate runs. A zero duration
+  /// would be rejected by the library and the movie discarded, so fall back
+  /// to the wall clock whenever the output has nothing usable to say.
+  static func completedDuration(
+    recordedSeconds: Double, startedAt: Date?, now: Date = Date()
+  ) -> TimeInterval {
+    if recordedSeconds.isFinite, recordedSeconds > 0 { return recordedSeconds }
+    guard let startedAt else { return 0 }
+    return max(0, now.timeIntervalSince(startedAt))
+  }
+}
+
+enum CameraLifecycleLogic {
+  /// Whether a session the system stopped (interruption, pressure shutdown)
+  /// should be restarted now. AVFoundation only resumes sessions it stopped
+  /// itself; a graph we stopped explicitly stays down until we start it.
+  static func shouldResumeSession(
+    isWanted: Bool, isRunning: Bool, isInterrupted: Bool, isRecording: Bool,
+    isDeviceConnected: Bool = true
+  ) -> Bool {
+    isWanted && !isRunning && !isInterrupted && !isRecording && isDeviceConnected
+  }
 }
 
 /// The capture mode is intentionally tiny: still photography remains the

@@ -55,6 +55,10 @@ final class CameraManager: NSObject, ObservableObject, @unchecked Sendable {
   var recordingTimer: DispatchSourceTimer?
   var stopSessionWhenRecordingFinishes = false
   var rebuildAfterRecordingFinishes = false
+  /// Whether the UI currently wants the session running. System-initiated
+  /// stops (interruptions, pressure shutdown) consult this to resume.
+  var sessionWanted = false
+  var pressureShutdownActive = false
   /// Session-queue-owned mirrors. Observable properties are published on
   /// main and must never be used to coordinate graph mutations.
   var sessionPosition: CameraPosition = .back
@@ -96,8 +100,26 @@ final class CameraManager: NSObject, ObservableObject, @unchecked Sendable {
       return
     }
     sessionQueue.async { [weak self] in
-      self?.startSessionOnQueue()
+      guard let self else { return }
+      self.sessionWanted = true
+      self.startSessionOnQueue()
     }
+  }
+
+  /// Restart a session the system stopped, once the UI still wants it and
+  /// nothing (interruption, pressure, an open movie file) blocks it.
+  func resumeSessionIfWantedOnQueue() {
+    let isBlocked = session.isInterrupted || pressureShutdownActive
+    // A disconnect during recording keeps the stale input until the movie
+    // closes; restarting on it would overwrite the "disconnected" state.
+    let isDeviceConnected = currentInput?.device.isConnected ?? true
+    guard
+      CameraLifecycleLogic.shouldResumeSession(
+        isWanted: sessionWanted, isRunning: session.isRunning, isInterrupted: isBlocked,
+        isRecording: recordingStartedAt != nil || movieOutput.isRecording,
+        isDeviceConnected: isDeviceConnected)
+    else { return }
+    startSessionOnQueue()
   }
 
   func startSessionOnQueue() {
@@ -126,6 +148,7 @@ final class CameraManager: NSObject, ObservableObject, @unchecked Sendable {
   func stopSession() {
     sessionQueue.async { [weak self] in
       guard let self else { return }
+      self.sessionWanted = false
       self.sessionStartRequested = false
       if self.recordingStartedAt != nil || self.movieOutput.isRecording {
         self.stopSessionWhenRecordingFinishes = true

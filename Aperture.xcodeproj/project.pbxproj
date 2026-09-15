@@ -53,6 +53,7 @@
 		A1000001000000000000002D /* MediaLibrary+Types.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000020000000000000035 /* MediaLibrary+Types.swift */; };
 		A1000001000000000000002E /* MediaLibrary+Persistence.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000020000000000000036 /* MediaLibrary+Persistence.swift */; };
 		B10000010000000000000001 /* CameraLogicTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000020000000000000001 /* CameraLogicTests.swift */; };
+		B100000100000000000000A1 /* AppModelRecoveryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B100000200000000000000A1 /* AppModelRecoveryTests.swift */; };
 		B10000010000000000000002 /* FilmProcessorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000020000000000000002 /* FilmProcessorTests.swift */; };
 		B10000010000000000000003 /* MediaLibraryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000020000000000000003 /* MediaLibraryTests.swift */; };
 		B10000010000000000000004 /* MediaModelsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000020000000000000004 /* MediaModelsTests.swift */; };
@@ -114,6 +115,7 @@
 		A10000020000000000000035 /* MediaLibrary+Types.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Storage/MediaLibrary+Types.swift"; sourceTree = "<group>"; };
 		A10000020000000000000036 /* MediaLibrary+Persistence.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Storage/MediaLibrary+Persistence.swift"; sourceTree = "<group>"; };
 		B10000020000000000000001 /* CameraLogicTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraLogicTests.swift; sourceTree = "<group>"; };
+		B100000200000000000000A1 /* AppModelRecoveryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModelRecoveryTests.swift; sourceTree = "<group>"; };
 		B10000020000000000000002 /* FilmProcessorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FilmProcessorTests.swift; sourceTree = "<group>"; };
 		B10000020000000000000003 /* MediaLibraryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaLibraryTests.swift; sourceTree = "<group>"; };
 		B10000020000000000000004 /* MediaModelsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaModelsTests.swift; sourceTree = "<group>"; };
@@ -229,6 +231,7 @@
 		B10000040000000000000001 /* ApertureTests */ = {
 			isa = PBXGroup;
 			children = (
+				B100000200000000000000A1 /* AppModelRecoveryTests.swift */,
 				B10000020000000000000001 /* CameraLogicTests.swift */,
 				B10000020000000000000002 /* FilmProcessorTests.swift */,
 				B10000020000000000000003 /* MediaLibraryTests.swift */,
@@ -472,6 +475,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B100000100000000000000A1 /* AppModelRecoveryTests.swift in Sources */,
 				B10000010000000000000001 /* CameraLogicTests.swift in Sources */,
 				B10000010000000000000002 /* FilmProcessorTests.swift in Sources */,
 				B10000010000000000000003 /* MediaLibraryTests.swift in Sources */,

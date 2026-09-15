@@ -98,4 +98,49 @@ final class CameraLogicTests: XCTestCase {
     XCTAssertEqual(decision.metadataMode, .auto)
     XCTAssertFalse(decision.usesScreenFlash)
   }
+
+  func testFlashOnIsOfferedOnlyWhereItCanBeFulfilled() {
+    XCTAssertEqual(
+      CameraFlashLogic.availableModes(hasFlash: true, position: .back), CameraFlashMode.allCases)
+    XCTAssertEqual(CameraFlashLogic.availableModes(hasFlash: false, position: .front), [.off, .on])
+    XCTAssertEqual(CameraFlashLogic.availableModes(hasFlash: false, position: .back), [.off])
+  }
+
+  func testCompletedRecordingDurationFallsBackToWallClockWhenOutputReportsZero() {
+    let now = Date(timeIntervalSince1970: 1_700_000_000)
+    let startedAt = now.addingTimeInterval(-3)
+
+    XCTAssertEqual(
+      CameraRecordingLogic.completedDuration(recordedSeconds: 2.5, startedAt: startedAt, now: now),
+      2.5)
+    XCTAssertEqual(
+      CameraRecordingLogic.completedDuration(recordedSeconds: 0, startedAt: startedAt, now: now), 3)
+    XCTAssertEqual(
+      CameraRecordingLogic.completedDuration(recordedSeconds: .nan, startedAt: startedAt, now: now),
+      3)
+    XCTAssertEqual(
+      CameraRecordingLogic.completedDuration(recordedSeconds: 0, startedAt: nil, now: now), 0)
+  }
+
+  func testSessionResumesAfterASystemStopOnlyWhileTheUIStillWantsIt() {
+    XCTAssertTrue(
+      CameraLifecycleLogic.shouldResumeSession(
+        isWanted: true, isRunning: false, isInterrupted: false, isRecording: false))
+    XCTAssertFalse(
+      CameraLifecycleLogic.shouldResumeSession(
+        isWanted: false, isRunning: false, isInterrupted: false, isRecording: false))
+    XCTAssertFalse(
+      CameraLifecycleLogic.shouldResumeSession(
+        isWanted: true, isRunning: true, isInterrupted: false, isRecording: false))
+    XCTAssertFalse(
+      CameraLifecycleLogic.shouldResumeSession(
+        isWanted: true, isRunning: false, isInterrupted: true, isRecording: false))
+    XCTAssertFalse(
+      CameraLifecycleLogic.shouldResumeSession(
+        isWanted: true, isRunning: false, isInterrupted: false, isRecording: true))
+    XCTAssertFalse(
+      CameraLifecycleLogic.shouldResumeSession(
+        isWanted: true, isRunning: false, isInterrupted: false, isRecording: false,
+        isDeviceConnected: false))
+  }
 }

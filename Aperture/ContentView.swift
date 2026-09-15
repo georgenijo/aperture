@@ -388,7 +388,9 @@ struct ContentView: View {
   }
 
   private var flashOptions: [CameraFlashMode] {
-    model.cameraManager.capabilities.hasFlash ? CameraFlashMode.allCases : [.off, .on]
+    CameraFlashLogic.availableModes(
+      hasFlash: model.cameraManager.capabilities.hasFlash,
+      position: model.cameraManager.currentPosition)
   }
 
   private var unavailableTitle: String {

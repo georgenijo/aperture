@@ -135,23 +135,37 @@ struct MediaProcessingState: Codable, Hashable, Sendable {
 
   let phase: Phase
   let failure: MediaProcessingFailure?
+  /// Development attempts started so far. Persisted across every phase so a
+  /// crash mid-development does not reset the count and launch recovery can
+  /// stop retrying an item that keeps dying.
+  let attemptCount: Int
 
-  private init(phase: Phase, failure: MediaProcessingFailure?) {
+  private init(phase: Phase, failure: MediaProcessingFailure?, attemptCount: Int) {
     self.phase = phase
     self.failure = failure
+    self.attemptCount = attemptCount
   }
 
-  static let pending = MediaProcessingState(phase: .pending, failure: nil)
-  static let processing = MediaProcessingState(phase: .processing, failure: nil)
-  static let ready = MediaProcessingState(phase: .ready, failure: nil)
+  static let pending = MediaProcessingState(phase: .pending, failure: nil, attemptCount: 0)
+  static let ready = MediaProcessingState(phase: .ready, failure: nil, attemptCount: 0)
+
+  static func processing(attemptCount: Int) -> MediaProcessingState {
+    MediaProcessingState(phase: .processing, failure: nil, attemptCount: attemptCount)
+  }
 
   static func failed(_ failure: MediaProcessingFailure) -> MediaProcessingState {
-    MediaProcessingState(phase: .failed, failure: failure)
+    MediaProcessingState(phase: .failed, failure: failure, attemptCount: failure.attemptCount)
+  }
+
+  /// The state to persist when starting one more development attempt.
+  var nextAttempt: MediaProcessingState {
+    .processing(attemptCount: attemptCount + 1)
   }
 
   private enum CodingKeys: String, CodingKey {
     case phase
     case failure
+    case attemptCount
   }
 
   init(from decoder: Decoder) throws {
@@ -165,7 +179,10 @@ struct MediaProcessingState: Codable, Hashable, Sendable {
         debugDescription: "Only a failed processing state may carry failure details."
       )
     }
-    self.init(phase: phase, failure: failure)
+    // Manifests written before the count was persisted only knew it while failed.
+    let attemptCount =
+      try values.decodeIfPresent(Int.self, forKey: .attemptCount) ?? failure?.attemptCount ?? 0
+    self.init(phase: phase, failure: failure, attemptCount: max(0, attemptCount))
   }
 }
 

@@ -241,6 +241,9 @@ extension CameraManager {
 
   func installPressureObservationOnQueue() {
     pressureObservation?.invalidate()
+    // The observation is not `.initial`, so seed the shutdown flag from the
+    // new device rather than inheriting whatever the previous one left.
+    pressureShutdownActive = currentInput?.device.systemPressureState.level == .shutdown
     pressureObservation = currentInput?.device.observe(
       \AVCaptureDevice.systemPressureState, options: [.new]
     ) { [weak self] device, _ in
@@ -279,11 +282,12 @@ extension CameraManager {
   }
 
   func handleInterruptionEndedOnQueue() {
+    publish { $0.issue = nil }
+    // A recording interruption stopped the graph explicitly, and
+    // AVFoundation only resumes sessions it stopped itself.
+    resumeSessionIfWantedOnQueue()
     let isRunning = session.isRunning
-    publish {
-      $0.issue = nil
-      $0.lifecycleState = isRunning ? .ready : .idle
-    }
+    publish { $0.lifecycleState = isRunning ? .ready : .idle }
   }
 
   func handleRuntimeErrorOnQueue(message: String, mediaServicesWereReset: Bool) {
@@ -357,6 +361,7 @@ extension CameraManager {
     currentInput = nil
     pressureObservation?.invalidate()
     pressureObservation = nil
+    pressureShutdownActive = false
     publish {
       $0.lifecycleState = .unavailable
       $0.issue = CameraIssue(
@@ -369,7 +374,9 @@ extension CameraManager {
   func handlePressureOnQueue(deviceID: String, level: AVCaptureDevice.SystemPressureState.Level) {
     guard deviceID == currentInput?.device.uniqueID else { return }
     guard level == .serious || level == .critical || level == .shutdown else {
+      pressureShutdownActive = false
       publish { if $0.issue?.kind == .pressure { $0.issue = nil } }
+      resumeSessionIfWantedOnQueue()
       return
     }
     publishIssue(
@@ -377,6 +384,7 @@ extension CameraManager {
       message: "The camera is running hot and may slow down.",
       recovery: "Pause briefly before taking another photo.")
     if level == .shutdown {
+      pressureShutdownActive = true
       if recordingStartedAt != nil || movieOutput.isRecording {
         stopSessionWhenRecordingFinishes = true
         stopRecordingOnQueue(
