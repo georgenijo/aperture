@@ -24,6 +24,13 @@ struct FilmParameters: Codable, Hashable, Sendable {
   let chromaticAberration: Double
   let lightLeakProbability: Double
   let lightLeakStrength: Double
+  /// Cross-process channel split (0...1); omitted from manifests written before v1.1.
+  let channelSplit: Double
+  /// How hard the toe is pulled to black (0...1); omitted from older manifests.
+  let blackCrush: Double
+  /// Split-tone offsets for the shadow and highlight bands; neutral in older manifests.
+  let shadowTint: FilmColorTint
+  let highlightTint: FilmColorTint
 
   init(
     exposure: Double,
@@ -39,7 +46,11 @@ struct FilmParameters: Codable, Hashable, Sendable {
     softness: Double,
     chromaticAberration: Double,
     lightLeakProbability: Double,
-    lightLeakStrength: Double
+    lightLeakStrength: Double,
+    channelSplit: Double = 0,
+    blackCrush: Double = 0,
+    shadowTint: FilmColorTint = .neutral,
+    highlightTint: FilmColorTint = .neutral
   ) {
     self.exposure = Self.clamp(exposure, to: -1...1, fallback: 0)
     self.contrast = Self.clamp(contrast, to: 0.75...1.5, fallback: 1)
@@ -55,6 +66,19 @@ struct FilmParameters: Codable, Hashable, Sendable {
     self.chromaticAberration = Self.clampUnit(chromaticAberration)
     self.lightLeakProbability = Self.clampUnit(lightLeakProbability)
     self.lightLeakStrength = Self.clampUnit(lightLeakStrength)
+    self.channelSplit = Self.clampUnit(channelSplit)
+    self.blackCrush = Self.clampUnit(blackCrush)
+    self.shadowTint = shadowTint
+    self.highlightTint = highlightTint
+  }
+
+  /// The colour and tone subset, ready to bake into a `CIColorCube`.
+  var colorGrade: FilmColorGrade {
+    FilmColorGrade(
+      exposure: exposure, contrast: contrast, saturation: saturation, warmth: warmth,
+      highlightRolloff: highlightRolloff, shadowCoolness: shadowCoolness,
+      channelSplit: channelSplit, blackCrush: blackCrush,
+      shadowTint: shadowTint, highlightTint: highlightTint)
   }
 
   var isWithinSupportedBounds: Bool {
@@ -70,6 +94,7 @@ struct FilmParameters: Codable, Hashable, Sendable {
     case exposure, contrast, saturation, warmth, highlightRolloff, shadowCoolness
     case grainAmount, grainSize, halation, vignette, softness, chromaticAberration
     case lightLeakProbability, lightLeakStrength
+    case channelSplit, blackCrush, shadowTint, highlightTint
   }
 
   init(from decoder: Decoder) throws {
@@ -88,7 +113,12 @@ struct FilmParameters: Codable, Hashable, Sendable {
       softness: try values.decode(Double.self, forKey: .softness),
       chromaticAberration: try values.decode(Double.self, forKey: .chromaticAberration),
       lightLeakProbability: try values.decode(Double.self, forKey: .lightLeakProbability),
-      lightLeakStrength: try values.decode(Double.self, forKey: .lightLeakStrength)
+      lightLeakStrength: try values.decode(Double.self, forKey: .lightLeakStrength),
+      channelSplit: try values.decodeIfPresent(Double.self, forKey: .channelSplit) ?? 0,
+      blackCrush: try values.decodeIfPresent(Double.self, forKey: .blackCrush) ?? 0,
+      shadowTint: try values.decodeIfPresent(FilmColorTint.self, forKey: .shadowTint) ?? .neutral,
+      highlightTint: try values.decodeIfPresent(FilmColorTint.self, forKey: .highlightTint)
+        ?? .neutral
     )
   }
 
@@ -108,6 +138,7 @@ struct FilmParameters: Codable, Hashable, Sendable {
       value.highlightRolloff, value.shadowCoolness, value.grainAmount,
       value.halation, value.vignette, value.softness,
       value.chromaticAberration, value.lightLeakProbability, value.lightLeakStrength,
+      value.channelSplit, value.blackCrush,
     ]
   }
 }
@@ -148,7 +179,11 @@ struct FilmRecipe: Codable, Hashable, Identifiable, Sendable {
       lightLeakProbability: leakEnabled ? baseParameters.lightLeakProbability : 0,
       lightLeakStrength: leakEnabled
         ? baseParameters.lightLeakStrength * random.value(in: 0.72...1.0)
-        : 0
+        : 0,
+      channelSplit: baseParameters.channelSplit,
+      blackCrush: baseParameters.blackCrush,
+      shadowTint: baseParameters.shadowTint,
+      highlightTint: baseParameters.highlightTint
     )
 
     return AppliedFilmRecipe(
@@ -251,12 +286,17 @@ enum FilmRecipeCatalog {
     id: .nineteenNinetyEight,
     version: 1,
     displayName: "1998",
+    // Tuned against Huji Cam on a shared desk scene (2026-09-15): lavender
+    // highlights, orange midtones, crushed blacks, no vignette.
     baseParameters: FilmParameters(
-      exposure: 0.04, contrast: 1.12, saturation: 1.18, warmth: 0.22,
-      highlightRolloff: 0.52, shadowCoolness: 0.08,
-      grainAmount: 0.26, grainSize: 0.85, halation: 0.22,
-      vignette: 0.18, softness: 0.09, chromaticAberration: 0.035,
-      lightLeakProbability: 0.18, lightLeakStrength: 0.28
+      exposure: 0.05, contrast: 1.02, saturation: 1.4, warmth: 0.5,
+      highlightRolloff: 0.35, shadowCoolness: 0,
+      grainAmount: 0.34, grainSize: 0.62, halation: 0.72,
+      vignette: 0.015, softness: 0.38, chromaticAberration: 0.22,
+      lightLeakProbability: 0.52, lightLeakStrength: 0.84,
+      channelSplit: 0.1, blackCrush: 0.3,
+      shadowTint: FilmColorTint(red: 0.1, green: 0.05, blue: 0.05),
+      highlightTint: FilmColorTint(red: -0.06, green: 0.03, blue: 0.26)
     )
   )
 

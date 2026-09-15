@@ -172,6 +172,26 @@ final class FilmProcessorTests: XCTestCase {
     XCTAssertTrue(outputStats.allFinite)
   }
 
+  func testColorStageRendersTheFilmColorModel() async throws {
+    // A flat wall-coloured frame with every spatial effect at zero must come
+    // out as the colour model's mapping: stills and video share that cube.
+    let wall = FilmRGB(red: 171 / 255, green: 173 / 255, blue: 163 / 255)
+    let source = try XCTUnwrap(makeSolidImage(wall, width: 64, height: 48))
+    XCTAssertEqual(try centrePixel(source).blue, wall.blue, accuracy: 1 / 255, "source")
+    let processor = FilmProcessor(context: CIContext(options: [.useSoftwareRenderer: true]))
+    let recipe = makeGradeOnlyRecipe(FilmRecipeCatalog.nineteenNinetyEight.baseParameters)
+    let output = try await processor.renderedCGImage(
+      CIImage(cgImage: source), recipe: recipe, renderSize: .preview(maxPixelDimension: 64))
+
+    let expected = FilmColorModel.map(wall, grade: recipe.parameters.colorGrade)
+    let centre = try centrePixel(output)
+    XCTAssertEqual(centre.red, expected.red, accuracy: 3 / 255, "red")
+    XCTAssertEqual(centre.green, expected.green, accuracy: 3 / 255, "green")
+    XCTAssertEqual(centre.blue, expected.blue, accuracy: 3 / 255, "blue")
+    // Sanity: the Huji grade must actually have moved the wall towards lavender.
+    XCTAssertGreaterThan(centre.blue, centre.red + 0.03)
+  }
+
   func testRenderedOutputIsExactlyRepeatableForSameSeed() async throws {
     let source = try XCTUnwrap(makeSyntheticImage(width: 96, height: 72))
     let processor = FilmProcessor(context: CIContext(options: [.useSoftwareRenderer: true]))
@@ -308,6 +328,56 @@ final class FilmProcessorTests: XCTestCase {
       ),
       timeZone: TimeZone(secondsFromGMT: 0)!
     )
+  }
+
+  /// The catalog grade with grain, halation, softness, aberration, vignette
+  /// and leaks removed, so only the colour stage touches the pixels.
+  private func makeGradeOnlyRecipe(_ base: FilmParameters) -> AppliedFilmRecipe {
+    let parameters = FilmParameters(
+      exposure: base.exposure, contrast: base.contrast, saturation: base.saturation,
+      warmth: base.warmth, highlightRolloff: base.highlightRolloff,
+      shadowCoolness: base.shadowCoolness,
+      grainAmount: 0, grainSize: 1, halation: 0, vignette: 0, softness: 0,
+      chromaticAberration: 0, lightLeakProbability: 0, lightLeakStrength: 0,
+      channelSplit: base.channelSplit, blackCrush: base.blackCrush,
+      shadowTint: base.shadowTint, highlightTint: base.highlightTint)
+    return AppliedFilmRecipe(
+      identifier: .nineteenNinetyEight, version: 1, seed: 1, parameters: parameters,
+      resolvedSettings: FilmResolvedSettings(
+        lightLeakApplied: false, dateStampConfiguration: .off, dateStampText: nil,
+        timeZoneIdentifier: "GMT"))
+  }
+
+  private func makeSolidImage(_ color: FilmRGB, width: Int, height: Int) -> CGImage? {
+    let colorSpace = CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB()
+    guard
+      let context = CGContext(
+        data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: width * 4,
+        space: colorSpace,
+        bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+          | CGBitmapInfo.byteOrder32Big.rawValue)
+    else { return nil }
+    // `CGColor(red:green:blue:alpha:)` is generic RGB; build the fill in sRGB.
+    guard
+      let fill = CGColor(
+        colorSpace: colorSpace, components: [color.red, color.green, color.blue, 1])
+    else { return nil }
+    context.setFillColor(fill)
+    context.fill(CGRect(x: 0, y: 0, width: width, height: height))
+    return context.makeImage()
+  }
+
+  private func centrePixel(_ image: CGImage) throws -> FilmRGB {
+    guard let providerData = image.dataProvider?.data,
+      let pointer = CFDataGetBytePtr(providerData)
+    else {
+      throw FilmProcessorError.renderFailed
+    }
+    let offset = ((image.height / 2) * image.bytesPerRow) + (image.width / 2) * 4
+    return FilmRGB(
+      red: Double(pointer[offset]) / 255,
+      green: Double(pointer[offset + 1]) / 255,
+      blue: Double(pointer[offset + 2]) / 255)
   }
 
   private func makeSyntheticImage(width: Int, height: Int) -> CGImage? {

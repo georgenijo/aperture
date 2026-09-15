@@ -251,8 +251,7 @@ final class FilmProcessor: @unchecked Sendable {
     let decision = FilmProcessingDecision.make(for: recipe)
 
     var image = sized.cropped(to: bounds)
-    image = applyToneCurve(image, parameters: parameters, extent: bounds)
-    image = applyColorResponse(image, parameters: parameters, extent: bounds)
+    image = applyColorGrade(image, parameters: parameters, extent: bounds)
     image = applyBloom(image, amount: parameters.halation, extent: bounds)
     image = applySoftness(image, amount: parameters.softness, extent: bounds)
     image = applyChromaticAberration(

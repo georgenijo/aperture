@@ -1,42 +1,37 @@
 import CoreGraphics
 import CoreImage
 
-extension FilmProcessor {
-  func applyToneCurve(_ image: CIImage, parameters: FilmParameters, extent: CGRect) -> CIImage {
-    guard let filter = CIFilter(name: "CIToneCurve") else { return image }
-    let rolloff = CGFloat(parameters.highlightRolloff)
-    filter.setValue(image, forKey: kCIInputImageKey)
-    filter.setValue(CIVector(x: 0, y: 0), forKey: "inputPoint0")
-    filter.setValue(CIVector(x: 0.25, y: 0.25 - rolloff * 0.02), forKey: "inputPoint1")
-    filter.setValue(
-      CIVector(x: 0.50, y: 0.50 + CGFloat(parameters.contrast - 1) * 0.12), forKey: "inputPoint2")
-    filter.setValue(CIVector(x: 0.75, y: 0.76 - rolloff * 0.10), forKey: "inputPoint3")
-    filter.setValue(CIVector(x: 1, y: 1 - rolloff * 0.16), forKey: "inputPoint4")
-    return filter.outputImage?.cropped(to: extent) ?? image
+/// The colour stage shared by stills and video: `FilmColorModel` baked into
+/// a native `CIColorCube`, so both paths grade identically and the whole
+/// tone/colour chain costs one texture lookup per pixel.
+enum FilmColorCube {
+  static let dimension = 32
+
+  /// Generating the table is the expensive part; build it once per render or
+  /// export. The `Data` is immutable, so video frames rendered concurrently
+  /// can each wrap it in their own filter.
+  static func data(grade: FilmColorGrade) -> Data {
+    FilmColorModel.cubeData(dimension: dimension, grade: grade)
   }
 
-  func applyColorResponse(_ image: CIImage, parameters: FilmParameters, extent: CGRect) -> CIImage {
-    var output = image
-    if let controls = CIFilter(name: "CIColorControls") {
-      controls.setValue(output, forKey: kCIInputImageKey)
-      controls.setValue(parameters.saturation, forKey: kCIInputSaturationKey)
-      controls.setValue(parameters.contrast, forKey: kCIInputContrastKey)
-      controls.setValue(parameters.exposure * 0.25, forKey: kCIInputBrightnessKey)
-      output = controls.outputImage?.cropped(to: extent) ?? output
-    }
+  private static let sRGB = CGColorSpace(name: CGColorSpace.sRGB)
 
-    if let warmth = CIFilter(name: "CIColorMatrix") {
-      let warm = CGFloat(parameters.warmth)
-      let cool = CGFloat(parameters.shadowCoolness)
-      warmth.setValue(output, forKey: kCIInputImageKey)
-      warmth.setValue(CIVector(x: 1 + warm * 0.08, y: 0, z: 0, w: 0), forKey: "inputRVector")
-      warmth.setValue(CIVector(x: 0, y: 1, z: 0, w: 0), forKey: "inputGVector")
-      warmth.setValue(
-        CIVector(x: 0, y: 0, z: 1 - warm * 0.07 + cool * 0.04, w: 0), forKey: "inputBVector")
-      warmth.setValue(CIVector(x: 0, y: 0, z: 0, w: 1), forKey: "inputAVector")
-      output = warmth.outputImage?.cropped(to: extent) ?? output
-    }
-    return output
+  static func apply(_ image: CIImage, cubeData: Data, extent: CGRect) -> CIImage {
+    guard let cube = CIFilter(name: "CIColorCubeWithColorSpace") else { return image }
+    cube.setValue(image, forKey: kCIInputImageKey)
+    cube.setValue(dimension, forKey: "inputCubeDimension")
+    cube.setValue(cubeData, forKey: "inputCubeData")
+    // The model is defined on sRGB-encoded values; Core Image otherwise
+    // looks the table up in its linear working space.
+    if let sRGB { cube.setValue(sRGB, forKey: "inputColorSpace") }
+    return cube.outputImage?.cropped(to: extent) ?? image
+  }
+}
+
+extension FilmProcessor {
+  func applyColorGrade(_ image: CIImage, parameters: FilmParameters, extent: CGRect) -> CIImage {
+    FilmColorCube.apply(
+      image, cubeData: FilmColorCube.data(grade: parameters.colorGrade), extent: extent)
   }
 
   func applyBloom(_ image: CIImage, amount: Double, extent: CGRect) -> CIImage {
@@ -57,7 +52,7 @@ extension FilmProcessor {
       bloomImage = warm.outputImage?.cropped(to: extent) ?? bloomImage
     }
     return blend(
-      bloomImage, over: image, opacity: min(0.42, CGFloat(amount) * 0.50), extent: extent)
+      bloomImage, over: image, opacity: min(0.68, CGFloat(amount) * 0.82), extent: extent)
   }
 
   func applySoftness(_ image: CIImage, amount: Double, extent: CGRect) -> CIImage {
@@ -67,7 +62,7 @@ extension FilmProcessor {
     blur.setValue(image, forKey: kCIInputImageKey)
     blur.setValue(max(0.15, extent.width * 0.0022 * CGFloat(amount)), forKey: kCIInputRadiusKey)
     guard let blurred = blur.outputImage?.cropped(to: extent) else { return image }
-    return blend(blurred, over: image, opacity: min(0.28, CGFloat(amount) * 0.42), extent: extent)
+    return blend(blurred, over: image, opacity: min(0.46, CGFloat(amount) * 0.72), extent: extent)
   }
 
   func applyChromaticAberration(

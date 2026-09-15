@@ -127,7 +127,7 @@ extension FilmProcessor {
           -(alongOffset * alongOffset) / max(0.018, decision.width * decision.width * 0.34))
         let directional = 0.82 + 0.18 * sin((u + v) * 12 + decision.angle * 5)
         let alpha = min(
-          0.34, max(0, strength) * decision.intensity * edgeFalloff * stripe * directional)
+          0.85, max(0, strength) * decision.intensity * edgeFalloff * stripe * directional)
         let offset = (y * width + x) * 4
         // The bitmap declares premultiplied alpha; write premultiplied
         // RGB to avoid bright fringes at transparent leak edges.

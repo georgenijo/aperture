@@ -129,6 +129,34 @@ final class VideoProcessorTests: XCTestCase {
     }
   }
 
+  func testExportedFramesRenderTheFilmColorModel() async throws {
+    // The video path must use the same colour cube as stills: a flat
+    // wall-coloured clip comes out as the model's mapping (within codec noise).
+    let wall = FilmRGB(red: 171 / 255, green: 173 / 255, blue: 163 / 255)
+    let sourceURL = try makeTinyVideo(solid: wall)
+    let destinationURL = FileManager.default.temporaryDirectory
+      .appendingPathComponent("aperture-video-graded-\(UUID().uuidString).mov")
+    defer {
+      try? FileManager.default.removeItem(at: sourceURL)
+      try? FileManager.default.removeItem(at: destinationURL)
+    }
+    let recipe = makeGradeOnlyRecipe(FilmRecipeCatalog.nineteenNinetyEight.baseParameters)
+    let outputURL = try await VideoProcessor().process(
+      sourceURL: sourceURL, recipe: recipe, destinationURL: destinationURL)
+
+    // The encoder/decoder round trip changes the nominal RGB values (notably
+    // through the video colour matrix), so grade the decoded source sample
+    // instead of assuming the writer preserves the requested bytes exactly.
+    let sourceCentre = try await centrePixel(ofVideoAt: sourceURL)
+
+    let centre = try await centrePixel(ofVideoAt: outputURL)
+    let expected = FilmColorModel.map(sourceCentre, grade: recipe.parameters.colorGrade)
+    XCTAssertEqual(centre.red, expected.red, accuracy: 8 / 255, "red")
+    XCTAssertEqual(centre.green, expected.green, accuracy: 8 / 255, "green")
+    XCTAssertEqual(centre.blue, expected.blue, accuracy: 8 / 255, "blue")
+    XCTAssertGreaterThan(centre.blue, centre.red + 0.03)
+  }
+
   func testMissingSourceAndUnsupportedRecipeVersionFailBeforeExport() async throws {
     let missingURL = FileManager.default.temporaryDirectory
       .appendingPathComponent("aperture-test-missing-\(UUID().uuidString).mov")
@@ -213,7 +241,51 @@ final class VideoProcessorTests: XCTestCase {
     return valid
   }
 
-  private func makeTinyVideo() throws -> URL {
+  private func makeGradeOnlyRecipe(_ base: FilmParameters) -> AppliedFilmRecipe {
+    let parameters = FilmParameters(
+      exposure: base.exposure, contrast: base.contrast, saturation: base.saturation,
+      warmth: base.warmth, highlightRolloff: base.highlightRolloff,
+      shadowCoolness: base.shadowCoolness,
+      grainAmount: 0, grainSize: 1, halation: 0, vignette: 0, softness: 0,
+      chromaticAberration: 0, lightLeakProbability: 0, lightLeakStrength: 0,
+      channelSplit: base.channelSplit, blackCrush: base.blackCrush,
+      shadowTint: base.shadowTint, highlightTint: base.highlightTint)
+    return AppliedFilmRecipe(
+      identifier: .nineteenNinetyEight, version: 1, seed: 1, parameters: parameters,
+      resolvedSettings: FilmResolvedSettings(
+        lightLeakApplied: false, dateStampConfiguration: .off, dateStampText: nil,
+        timeZoneIdentifier: "GMT"))
+  }
+
+  private func centrePixel(ofVideoAt url: URL) async throws -> FilmRGB {
+    let generator = AVAssetImageGenerator(asset: AVURLAsset(url: url))
+    generator.requestedTimeToleranceBefore = .zero
+    generator.requestedTimeToleranceAfter = .zero
+    let (frame, _) = try await generator.image(at: CMTime(value: 1, timescale: 10))
+    return try centrePixel(frame)
+  }
+
+  private func centrePixel(_ image: CGImage) throws -> FilmRGB {
+    let colorSpace = CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB()
+    var bytes = [UInt8](repeating: 0, count: 4)
+    guard
+      let context = CGContext(
+        data: &bytes, width: 1, height: 1, bitsPerComponent: 8, bytesPerRow: 4,
+        space: colorSpace,
+        bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+          | CGBitmapInfo.byteOrder32Big.rawValue)
+    else { throw testVideoWriterError() }
+    // Draw so that the source's centre pixel lands on the single output pixel.
+    context.draw(
+      image,
+      in: CGRect(
+        x: -CGFloat(image.width) / 2 + 0.5, y: -CGFloat(image.height) / 2 + 0.5,
+        width: CGFloat(image.width), height: CGFloat(image.height)))
+    return FilmRGB(
+      red: Double(bytes[0]) / 255, green: Double(bytes[1]) / 255, blue: Double(bytes[2]) / 255)
+  }
+
+  private func makeTinyVideo(solid: FilmRGB? = nil) throws -> URL {
     let url = FileManager.default.temporaryDirectory
       .appendingPathComponent("aperture-video-source-\(UUID().uuidString).mov")
     let writer = try AVAssetWriter(outputURL: url, fileType: .mov)
@@ -252,7 +324,9 @@ final class VideoProcessorTests: XCTestCase {
       while !input.isReadyForMoreMediaData {
         Thread.sleep(forTimeInterval: 0.001)
       }
-      guard let pixelBuffer = makePixelBuffer(width: width, height: height, frameIndex: frameIndex),
+      guard
+        let pixelBuffer = makePixelBuffer(
+          width: width, height: height, frameIndex: frameIndex, solid: solid),
         adaptor.append(
           pixelBuffer, withPresentationTime: CMTime(value: Int64(frameIndex), timescale: 10))
       else {
@@ -270,7 +344,9 @@ final class VideoProcessorTests: XCTestCase {
     return url
   }
 
-  private func makePixelBuffer(width: Int, height: Int, frameIndex: Int) -> CVPixelBuffer? {
+  private func makePixelBuffer(width: Int, height: Int, frameIndex: Int, solid: FilmRGB? = nil)
+    -> CVPixelBuffer?
+  {
     var pixelBuffer: CVPixelBuffer?
     let attributes =
       [
@@ -288,9 +364,9 @@ final class VideoProcessorTests: XCTestCase {
     guard let baseAddress = CVPixelBufferGetBaseAddress(pixelBuffer) else { return nil }
     let bytesPerRow = CVPixelBufferGetBytesPerRow(pixelBuffer)
     let pixels = baseAddress.assumingMemoryBound(to: UInt8.self)
-    let red = UInt8(80 + frameIndex * 20)
-    let green = UInt8(110 + frameIndex * 10)
-    let blue = UInt8(150)
+    let red = solid.map { UInt8(($0.red * 255).rounded()) } ?? UInt8(80 + frameIndex * 20)
+    let green = solid.map { UInt8(($0.green * 255).rounded()) } ?? UInt8(110 + frameIndex * 10)
+    let blue = solid.map { UInt8(($0.blue * 255).rounded()) } ?? UInt8(150)
     for y in 0..<height {
       for x in 0..<width {
         let offset = y * bytesPerRow + x * 4

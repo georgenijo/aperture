@@ -186,6 +186,7 @@ final class VideoProcessor: @unchecked Sendable {
     let renderSize = CGSize(width: abs(transformedSize.width), height: abs(transformedSize.height))
     let noiseBank = Self.makeNoiseBank(seed: recipe.seed, count: 8, size: 384)
     let decision = FilmProcessingDecision.make(for: recipe)
+    let colorCube = FilmColorCube.data(grade: recipe.parameters.colorGrade)
     let videoComposition = AVMutableVideoComposition(asset: asset) { [weak self] request in
       guard let self else {
         request.finish(
@@ -206,7 +207,7 @@ final class VideoProcessor: @unchecked Sendable {
       do {
         let output = try self.apply(
           recipe: recipe, image: source, extent: source.extent, frameIndex: index,
-          decision: decision, noiseBank: noiseBank)
+          decision: decision, noiseBank: noiseBank, colorCube: colorCube)
         request.finish(with: output, context: self.context)
         let fraction =
           duration.seconds > 0
@@ -271,42 +272,17 @@ final class VideoProcessor: @unchecked Sendable {
 
   private func apply(
     recipe: AppliedFilmRecipe, image: CIImage, extent: CGRect, frameIndex: Int,
-    decision: FilmProcessingDecision, noiseBank: [CIImage]
+    decision: FilmProcessingDecision, noiseBank: [CIImage], colorCube: Data
   ) throws -> CIImage {
     guard extent.width.isFinite, extent.height.isFinite, extent.width > 0, extent.height > 0 else {
       throw VideoProcessorError.sourceUnreadable
     }
     let p = recipe.parameters
     var output = image.cropped(to: extent)
-    if let curve = CIFilter(name: "CIToneCurve") {
-      curve.setValue(output, forKey: kCIInputImageKey)
-      curve.setValue(CIVector(x: 0, y: 0), forKey: "inputPoint0")
-      curve.setValue(CIVector(x: 0.25, y: 0.25 - p.highlightRolloff * 0.02), forKey: "inputPoint1")
-      curve.setValue(CIVector(x: 0.50, y: 0.50 + (p.contrast - 1) * 0.12), forKey: "inputPoint2")
-      curve.setValue(CIVector(x: 0.75, y: 0.76 - p.highlightRolloff * 0.10), forKey: "inputPoint3")
-      curve.setValue(CIVector(x: 1, y: 1 - p.highlightRolloff * 0.16), forKey: "inputPoint4")
-      output = curve.outputImage?.cropped(to: extent) ?? output
-    }
-    if let controls = CIFilter(name: "CIColorControls") {
-      controls.setValue(output, forKey: kCIInputImageKey)
-      controls.setValue(p.saturation, forKey: kCIInputSaturationKey)
-      controls.setValue(p.contrast, forKey: kCIInputContrastKey)
-      controls.setValue(p.exposure * 0.25, forKey: kCIInputBrightnessKey)
-      output = controls.outputImage?.cropped(to: extent) ?? output
-    }
-    if let matrix = CIFilter(name: "CIColorMatrix") {
-      matrix.setValue(output, forKey: kCIInputImageKey)
-      matrix.setValue(CIVector(x: 1 + p.warmth * 0.08, y: 0, z: 0, w: 0), forKey: "inputRVector")
-      matrix.setValue(CIVector(x: 0, y: 1, z: 0, w: 0), forKey: "inputGVector")
-      matrix.setValue(
-        CIVector(x: 0, y: 0, z: 1 - p.warmth * 0.07 + p.shadowCoolness * 0.04, w: 0),
-        forKey: "inputBVector")
-      matrix.setValue(CIVector(x: 0, y: 0, z: 0, w: 1), forKey: "inputAVector")
-      output = matrix.outputImage?.cropped(to: extent) ?? output
-    }
+    output = FilmColorCube.apply(output, cubeData: colorCube, extent: extent)
     if p.halation > 0.001, let bloom = CIFilter(name: "CIBloom") {
       bloom.setValue(output, forKey: kCIInputImageKey)
-      bloom.setValue(min(1, p.halation * 0.7), forKey: kCIInputIntensityKey)
+      bloom.setValue(min(1, p.halation), forKey: kCIInputIntensityKey)
       bloom.setValue(max(1, extent.width * 0.008 * p.halation), forKey: kCIInputRadiusKey)
       output = bloom.outputImage?.cropped(to: extent) ?? output
     }
@@ -389,7 +365,7 @@ final class VideoProcessor: @unchecked Sendable {
     let points = Self.lightLeakGradientPoints(
       edge: leak.edge, position: leak.position, width: leak.width, extent: extent)
     let width = CGFloat(min(max(leak.width, 0), 1))
-    let baseAlpha = CGFloat(min(0.4, strength * leak.intensity))
+    let baseAlpha = CGFloat(min(0.85, strength * leak.intensity))
     let color = CIColor(
       red: leak.color.red, green: leak.color.green, blue: leak.color.blue,
       alpha: baseAlpha * Self.lightLeakOpacity(distance: 0, width: width))
