@@ -35,6 +35,14 @@ Paired iPhone verification may be blocked by an Xcode/device developer disk imag
 - Signed archive: blocked because this Mac has no usable Apple developer account credentials or provisioning profile for `com.georgenijo.Aperture`.
 - Paired iPhone 17 Pro on iOS 26.6.2: destination discovery succeeded, but the developer disk image could not be mounted, so install/launch and the physical checklist remain open.
 
+### Physical-device record — 2026-09-15 (Shawn's Mac)
+
+- Xcode 26.6 (17F113), iOS 26.5 Simulator, commit `2d357ff`: all 63 tests passed (59 unit/integration plus 4 UI).
+- Paired iPhone 15 Pro (`iPhone16,1`, 128 GB) on iOS 27.0 (24A437), Developer Mode enabled: developer disk image mounted, signed Debug build installed and launched. Signing used a Personal Team with a dev bundle ID override (`DEVELOPMENT_TEAM`/`PRODUCT_BUNDLE_IDENTIFIER` via a local xcconfig, not committed); a signed archive under the project's team is still open.
+- All 59 unit/integration tests passed on the iPhone itself, including the `FilmProcessorTests`, `ReferenceFixtureTests`, and `VideoProcessorTests` renderers on device hardware. One test needed a device-portability fix: on device `contentsOfDirectory` returns `/private/var/...` while the library returns the symlink-resolved `/var/...` form, so `MediaLibraryTests` now compares resolved paths. Production code only compares relative paths and `lastPathComponent`, so no library change was needed.
+- UI tests on device: blocked. The free developer profile allows three installed apps per device and the `ApertureUITests-Runner` was the fourth (`MIInstallerErrorDomain` code 13). UI coverage stands on the simulator run only.
+- Interactive checklist items below (permissions, capture, lens/flash, recording, Photos export) still need a person holding the device; the installed build is ready for that pass.
+
 ## Performance targets and measurement status
 
 Targets are release gates to measure, not current claims: shutter tap should return control without waiting for development; camera/session UI should remain responsive during repeated captures; the local commit should complete before development begins; pending/processing media should resume sequentially after an interrupted launch; and representative full-resolution/photo or short-film development should complete without memory pressure or dropped camera responsiveness. The repository currently has no recorded device benchmark baseline. Capture baseline timings and memory/pressure observations on representative physical devices before declaring targets passed.

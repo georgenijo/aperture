@@ -464,7 +464,11 @@ final class MediaLibraryTests: XCTestCase {
       includingPropertiesForKeys: [.isRegularFileKey]
     ).filter { $0.lastPathComponent != MediaLibraryPaths.itemMetadata }
     XCTAssertEqual(payloads.count, 2)
-    XCTAssertTrue(payloads.contains(oldURL))
+    // On device, `contentsOfDirectory` returns `/private/var/...` while the
+    // library hands back the symlink-resolved `/var/...` form, so compare by
+    // resolved path rather than URL equality.
+    let payloadPaths = Set(payloads.map { $0.resolvingSymlinksInPath().path })
+    XCTAssertTrue(payloadPaths.contains(oldURL.resolvingSymlinksInPath().path))
     XCTAssertTrue(payloads.contains { (try? Data(contentsOf: $0)) == newData })
 
     let relaunched = MediaLibrary(rootURL: root)
