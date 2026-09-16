@@ -275,7 +275,7 @@ final class FilmProcessor: @unchecked Sendable {
           recipe.resolvedSettings.dateStampConfiguration.mode != .off
         {
           image = applyDateStamp(
-            image, text: dateStampText, extent: bounds, style: dateStampStage.style)
+            image, text: dateStampText, stage: dateStampStage, extent: bounds)
         }
       }
     }
