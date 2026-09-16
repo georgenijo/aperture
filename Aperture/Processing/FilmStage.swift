@@ -323,17 +323,30 @@ struct LightLeakStage: Codable, Hashable, Sendable {
     maxIntensity: Double = 1.0,
     palette: [LightLeakColor] = LightLeakStage.defaultPalette
   ) {
-    self.probability = probability
-    self.strength = strength
-    self.minWidth = minWidth
-    self.maxWidth = maxWidth
-    self.minPosition = minPosition
-    self.maxPosition = maxPosition
-    self.minAngle = minAngle
-    self.maxAngle = maxAngle
-    self.minIntensity = minIntensity
-    self.maxIntensity = maxIntensity
-    self.palette = palette
+    // Normalise so a hand-edited or corrupt manifest can never trap the
+    // renderer: reversed ranges are swapped, non-finite bounds fall back to
+    // the v1 constants, and an empty palette uses the default one.
+    self.probability = Self.unit(probability)
+    self.strength = Self.unit(strength)
+    (self.minWidth, self.maxWidth) = Self.ordered(minWidth, maxWidth, fallback: (0.16, 0.42))
+    (self.minPosition, self.maxPosition) = Self.ordered(
+      minPosition, maxPosition, fallback: (0.16, 0.84))
+    (self.minAngle, self.maxAngle) = Self.ordered(minAngle, maxAngle, fallback: (-0.42, 0.42))
+    (self.minIntensity, self.maxIntensity) = Self.ordered(
+      minIntensity, maxIntensity, fallback: (0.68, 1.0))
+    self.palette = palette.isEmpty ? LightLeakStage.defaultPalette : palette
+  }
+
+  private static func unit(_ value: Double) -> Double {
+    guard value.isFinite else { return 0 }
+    return min(max(value, 0), 1)
+  }
+
+  private static func ordered(_ lower: Double, _ upper: Double, fallback: (Double, Double))
+    -> (Double, Double)
+  {
+    guard lower.isFinite, upper.isFinite else { return fallback }
+    return lower <= upper ? (lower, upper) : (upper, lower)
   }
 
   private enum CodingKeys: String, CodingKey {

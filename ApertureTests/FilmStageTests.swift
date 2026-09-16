@@ -52,7 +52,14 @@ final class FilmStageTests: XCTestCase {
       let expectedStages = FilmStage.legacyPipeline(parameters: parameters, identifier: identifier)
       XCTAssertEqual(decoded.stages, expectedStages, identifier.rawValue)
       XCTAssertEqual(decoded.identifier, identifier)
-      XCTAssertEqual(decoded.version, 1)
+      // A legacy manifest is upgraded in memory to the stage schema so its
+      // re-encoded form is never a version-1 document carrying `stages`.
+      XCTAssertEqual(decoded.version, FilmRecipeVersion.stageSchema)
+      let reencoded = try JSONSerialization.jsonObject(with: encoder.encode(decoded))
+        as? [String: Any]
+      XCTAssertNotNil(reencoded?["stages"])
+      XCTAssertNil(reencoded?["parameters"])
+      XCTAssertEqual(reencoded?["version"] as? Int, FilmRecipeVersion.stageSchema)
 
       let leak = try XCTUnwrap(decoded.stages.lightLeak, identifier.rawValue)
       if identifier == .nineteenNinetyEight {
@@ -142,6 +149,29 @@ final class FilmStageTests: XCTestCase {
   }
 
   // MARK: 4. The executor is driven by the stage array, not a fixed order
+
+  func testMalformedLightLeakConfigurationsAreNormalisedInsteadOfTrapping() throws {
+    let json = """
+      {"kind":"lightLeak","configuration":{"probability":1,"strength":1,
+       "minWidth":0.42,"maxWidth":0.16,"minPosition":0.9,"maxPosition":0.1,
+       "palette":[]}}
+      """
+    let stage = try ApertureJSON.makeDecoder().decode(FilmStage.self, from: Data(json.utf8))
+    let leak = try XCTUnwrap([stage].lightLeak)
+    XCTAssertEqual(leak.minWidth, 0.16)
+    XCTAssertEqual(leak.maxWidth, 0.42)
+    XCTAssertEqual(leak.minPosition, 0.1)
+    XCTAssertEqual(leak.maxPosition, 0.9)
+    XCTAssertEqual(leak.palette, LightLeakStage.defaultPalette)
+
+    let applied = AppliedFilmRecipe(
+      identifier: .night, version: FilmRecipeVersion.current, seed: 7, stages: [stage],
+      resolvedSettings: FilmResolvedSettings(
+        lightLeakApplied: true, dateStampConfiguration: .off, dateStampText: nil,
+        timeZoneIdentifier: "GMT"))
+    let decision = FilmProcessingDecision.make(for: applied)
+    XCTAssertNotNil(decision.leak)
+  }
 
   func testExecutorAppliesOnlyPresentStagesInArrayOrder() async throws {
     let processor = FilmProcessor(context: CIContext(options: [.useSoftwareRenderer: true]))
