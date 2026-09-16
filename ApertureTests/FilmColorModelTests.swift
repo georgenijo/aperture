@@ -3,7 +3,7 @@ import XCTest
 @testable import Aperture
 
 final class FilmColorModelTests: XCTestCase {
-  private let huji = FilmRecipeCatalog.nineteenNinetyEight.baseParameters.colorGrade
+  private let huji = FilmRecipeCatalog.nineteenNinetyEight.stages.colorGrade ?? .neutral
 
   func testHujiGradePreservesSceneHuesWhileSeparatingWarmAndCoolColors() {
     let wall = FilmColorModel.map(rgb(171, 173, 163), grade: huji)
@@ -19,7 +19,7 @@ final class FilmColorModelTests: XCTestCase {
   }
 
   func testNeutralGradeIsIdentity() {
-    let neutral = FilmRecipeCatalog.legacyOriginal.baseParameters.colorGrade
+    let neutral = FilmRecipeCatalog.legacyOriginal.stages.colorGrade ?? .neutral
     for value in stride(from: 0.0, through: 1.0, by: 0.125) {
       let mapped = FilmColorModel.map(FilmRGB(red: value, green: value * 0.5, blue: 1 - value),
         grade: neutral)
@@ -78,7 +78,19 @@ final class FilmColorModelTests: XCTestCase {
     XCTAssertEqual(parameters.highlightTint, .neutral)
     XCTAssertEqual(parameters.channelSplit, 0)
     XCTAssertEqual(parameters.blackCrush, 0)
-    let hujiParameters = FilmRecipeCatalog.nineteenNinetyEight.baseParameters
+    // FilmRecipe no longer exposes `baseParameters` (recipes are stage lists),
+    // so this mirrors the 1998 catalog entry's literal values directly to
+    // keep testing `FilmParameters`, the v1 wire format, round-tripping.
+    let hujiParameters = FilmParameters(
+      exposure: 0.015, contrast: 1.22, saturation: 1.42, warmth: 0.10,
+      highlightRolloff: 0.16, shadowCoolness: 0.42,
+      grainAmount: 0.24, grainSize: 0.56, halation: 0.16,
+      vignette: 0.075, softness: 0.72, chromaticAberration: 0.78,
+      lightLeakProbability: 0.46, lightLeakStrength: 0.48,
+      channelSplit: 0.07, blackCrush: 0.43,
+      shadowTint: FilmColorTint(red: -0.018, green: 0.012, blue: 0.045),
+      highlightTint: FilmColorTint(red: 0.014, green: 0.006, blue: -0.012)
+    )
     let roundTrip = try ApertureJSON.makeDecoder().decode(
       FilmParameters.self, from: ApertureJSON.makeEncoder().encode(hujiParameters))
     XCTAssertEqual(roundTrip, hujiParameters)

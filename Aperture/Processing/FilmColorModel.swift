@@ -32,7 +32,7 @@ struct FilmColorTint: Codable, Hashable, Sendable {
 /// The subset of `FilmParameters` that decides colour and tone. It is kept
 /// free of Core Image so the mapping can be unit-tested numerically and baked
 /// into a `CIColorCube` for stills and video alike.
-struct FilmColorGrade: Hashable, Sendable {
+struct FilmColorGrade: Codable, Hashable, Sendable {
   let exposure: Double
   let contrast: Double
   let saturation: Double
@@ -43,6 +43,69 @@ struct FilmColorGrade: Hashable, Sendable {
   let blackCrush: Double
   let shadowTint: FilmColorTint
   let highlightTint: FilmColorTint
+
+  static let neutral = FilmColorGrade(
+    exposure: 0, contrast: 1, saturation: 1, warmth: 0,
+    highlightRolloff: 0, shadowCoolness: 0, channelSplit: 0, blackCrush: 0,
+    shadowTint: .neutral, highlightTint: .neutral)
+
+  init(
+    exposure: Double,
+    contrast: Double,
+    saturation: Double,
+    warmth: Double,
+    highlightRolloff: Double,
+    shadowCoolness: Double,
+    channelSplit: Double = 0,
+    blackCrush: Double = 0,
+    shadowTint: FilmColorTint = .neutral,
+    highlightTint: FilmColorTint = .neutral
+  ) {
+    self.exposure = Self.clamp(exposure, to: -1...1, fallback: 0)
+    self.contrast = Self.clamp(contrast, to: 0.75...1.5, fallback: 1)
+    self.saturation = Self.clamp(saturation, to: 0.5...1.6, fallback: 1)
+    self.warmth = Self.clamp(warmth, to: -1...1, fallback: 0)
+    self.highlightRolloff = Self.clampUnit(highlightRolloff)
+    self.shadowCoolness = Self.clampUnit(shadowCoolness)
+    self.channelSplit = Self.clampUnit(channelSplit)
+    self.blackCrush = Self.clampUnit(blackCrush)
+    self.shadowTint = shadowTint
+    self.highlightTint = highlightTint
+  }
+
+  private enum CodingKeys: String, CodingKey {
+    case exposure, contrast, saturation, warmth, highlightRolloff, shadowCoolness
+    case channelSplit, blackCrush, shadowTint, highlightTint
+  }
+
+  init(from decoder: Decoder) throws {
+    let values = try decoder.container(keyedBy: CodingKeys.self)
+    self.init(
+      exposure: try values.decode(Double.self, forKey: .exposure),
+      contrast: try values.decode(Double.self, forKey: .contrast),
+      saturation: try values.decode(Double.self, forKey: .saturation),
+      warmth: try values.decode(Double.self, forKey: .warmth),
+      highlightRolloff: try values.decode(Double.self, forKey: .highlightRolloff),
+      shadowCoolness: try values.decode(Double.self, forKey: .shadowCoolness),
+      channelSplit: try values.decodeIfPresent(Double.self, forKey: .channelSplit) ?? 0,
+      blackCrush: try values.decodeIfPresent(Double.self, forKey: .blackCrush) ?? 0,
+      shadowTint: try values.decodeIfPresent(FilmColorTint.self, forKey: .shadowTint) ?? .neutral,
+      highlightTint: try values.decodeIfPresent(FilmColorTint.self, forKey: .highlightTint)
+        ?? .neutral
+    )
+  }
+
+  private static func clamp(_ value: Double, to range: ClosedRange<Double>, fallback: Double)
+    -> Double
+  {
+    guard value.isFinite else { return fallback }
+    return min(max(value, range.lowerBound), range.upperBound)
+  }
+
+  private static func clampUnit(_ value: Double) -> Double {
+    guard value.isFinite else { return 0 }
+    return min(max(value, 0), 1)
+  }
 }
 
 enum FilmColorModel {

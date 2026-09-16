@@ -67,20 +67,20 @@ struct FilmProcessingDecision: Hashable, Sendable {
 
   static func make(for recipe: AppliedFilmRecipe) -> FilmProcessingDecision {
     var random = SeededRandomNumberGenerator(seed: recipe.seed ^ 0xA5A5_5A5A_3141_5926)
-    let isHujiStyle = recipe.identifier == .nineteenNinetyEight
     let leak: LightLeakDecision?
     if recipe.resolvedSettings.lightLeakApplied,
-      recipe.parameters.lightLeakProbability > 0,
-      recipe.parameters.lightLeakStrength > 0
+      let leakStage = recipe.stages.lightLeak,
+      leakStage.probability > 0,
+      leakStage.strength > 0
     {
+      let edges = LightLeakDecision.Edge.allCases
       leak = LightLeakDecision(
-        edge: LightLeakDecision.Edge(rawValue: random.next() % 4) ?? .left,
-        position: random.value(in: 0.16...0.84),
-        width: random.value(in: isHujiStyle ? 0.10...0.27 : 0.16...0.42),
-        angle: random.value(in: -0.42...0.42),
-        color: LightLeakDecision.palette[
-          Int(random.next() % UInt64(LightLeakDecision.palette.count))],
-        intensity: random.value(in: 0.68...1.0)
+        edge: edges[Int(random.next() % UInt64(edges.count))],
+        position: random.value(in: leakStage.minPosition...leakStage.maxPosition),
+        width: random.value(in: leakStage.minWidth...leakStage.maxWidth),
+        angle: random.value(in: leakStage.minAngle...leakStage.maxAngle),
+        color: leakStage.palette[Int(random.next() % UInt64(leakStage.palette.count))],
+        intensity: random.value(in: leakStage.minIntensity...leakStage.maxIntensity)
       )
     } else {
       leak = nil
@@ -97,7 +97,7 @@ struct FilmProcessingDecision: Hashable, Sendable {
 }
 
 struct LightLeakDecision: Hashable, Sendable {
-  enum Edge: UInt64, Hashable, Sendable {
+  enum Edge: String, CaseIterable, Codable, Hashable, Sendable {
     case left
     case right
     case top
@@ -111,15 +111,10 @@ struct LightLeakDecision: Hashable, Sendable {
   let color: LightLeakColor
   let intensity: Double
 
-  static let palette: [LightLeakColor] = [
-    LightLeakColor(red: 1.0, green: 0.20, blue: 0.06),
-    LightLeakColor(red: 1.0, green: 0.38, blue: 0.07),
-    LightLeakColor(red: 0.96, green: 0.08, blue: 0.16),
-    LightLeakColor(red: 1.0, green: 0.55, blue: 0.12),
-  ]
+  static let palette: [LightLeakColor] = LightLeakStage.defaultPalette
 }
 
-struct LightLeakColor: Hashable, Sendable {
+struct LightLeakColor: Codable, Hashable, Sendable {
   let red: Double
   let green: Double
   let blue: Double

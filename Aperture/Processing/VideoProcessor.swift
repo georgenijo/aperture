@@ -86,8 +86,8 @@ final class VideoProcessor: @unchecked Sendable {
     return FrameTreatment(
       grainPhase: grainPhase(baseSeed: recipe.seed, frameIndex: frameIndex),
       staticLeak: decision.leak,
-      staticContrast: recipe.parameters.contrast,
-      staticSaturation: recipe.parameters.saturation
+      staticContrast: recipe.colorGrade.contrast,
+      staticSaturation: recipe.colorGrade.saturation
     )
   }
 
@@ -129,7 +129,7 @@ final class VideoProcessor: @unchecked Sendable {
     destinationURL: URL? = nil,
     progress: (@Sendable (Progress) -> Void)? = nil
   ) async throws -> URL {
-    guard recipe.version == 1 else {
+    guard FilmRecipeVersion.supported.contains(recipe.version) else {
       throw VideoProcessorError.unsupportedRecipeVersion(recipe.version)
     }
     if recipe.resolvedSettings.dateStampConfiguration.mode != .off,
@@ -186,7 +186,7 @@ final class VideoProcessor: @unchecked Sendable {
     let renderSize = CGSize(width: abs(transformedSize.width), height: abs(transformedSize.height))
     let noiseBank = Self.makeNoiseBank(seed: recipe.seed, count: 8, size: 384)
     let decision = FilmProcessingDecision.make(for: recipe)
-    let colorCube = FilmColorCube.data(grade: recipe.parameters.colorGrade)
+    let colorCube = FilmColorCube.data(grade: recipe.colorGrade)
     let videoComposition = AVMutableVideoComposition(asset: asset) { [weak self] request in
       guard let self else {
         request.finish(
@@ -277,29 +277,33 @@ final class VideoProcessor: @unchecked Sendable {
     guard extent.width.isFinite, extent.height.isFinite, extent.width > 0, extent.height > 0 else {
       throw VideoProcessorError.sourceUnreadable
     }
-    let p = recipe.parameters
+    let halationAmount = recipe.halation?.amount ?? 0
+    let vignetteAmount = recipe.vignette?.amount ?? 0
+    let lightLeakStrength = recipe.lightLeak?.strength ?? 0
+    let grainAmount = recipe.grain?.amount ?? 0
     var output = image.cropped(to: extent)
     output = FilmColorCube.apply(output, cubeData: colorCube, extent: extent)
-    if p.halation > 0.001, let bloom = CIFilter(name: "CIBloom") {
+    if halationAmount > 0.001, let bloom = CIFilter(name: "CIBloom") {
       bloom.setValue(output, forKey: kCIInputImageKey)
-      bloom.setValue(min(1, p.halation), forKey: kCIInputIntensityKey)
-      bloom.setValue(max(1, extent.width * 0.008 * p.halation), forKey: kCIInputRadiusKey)
+      bloom.setValue(min(1, halationAmount), forKey: kCIInputIntensityKey)
+      bloom.setValue(max(1, extent.width * 0.008 * halationAmount), forKey: kCIInputRadiusKey)
       output = bloom.outputImage?.cropped(to: extent) ?? output
     }
-    if p.vignette > 0.001, let vignette = CIFilter(name: "CIVignetteEffect") {
+    if vignetteAmount > 0.001, let vignette = CIFilter(name: "CIVignetteEffect") {
       vignette.setValue(output, forKey: kCIInputImageKey)
       vignette.setValue(CIVector(x: extent.midX, y: extent.midY), forKey: kCIInputCenterKey)
       vignette.setValue(max(extent.width, extent.height) * 0.52, forKey: kCIInputRadiusKey)
-      vignette.setValue(p.vignette * 1.4, forKey: kCIInputIntensityKey)
+      vignette.setValue(vignetteAmount * 1.4, forKey: kCIInputIntensityKey)
       output = vignette.outputImage?.cropped(to: extent) ?? output
     }
     if let leak = decision.leak {
-      output = applyLeak(output, leak: leak, strength: p.lightLeakStrength, extent: extent)
+      output = applyLeak(output, leak: leak, strength: lightLeakStrength, extent: extent)
     }
     // CIRandomGenerator is evaluated by Core Image, not decoded into a
     // full-resolution CPU buffer. A deterministic subpixel translation per
     // frame keeps grain alive without changing the recipe's color/leak.
-    if p.grainAmount > 0.001, !noiseBank.isEmpty, let colorMatrix = CIFilter(name: "CIColorMatrix")
+    if grainAmount > 0.001, !noiseBank.isEmpty,
+      let colorMatrix = CIFilter(name: "CIColorMatrix")
     {
       let phase = Self.grainPhase(baseSeed: recipe.seed, frameIndex: frameIndex)
       let bankImage = noiseBank[frameIndex % noiseBank.count]

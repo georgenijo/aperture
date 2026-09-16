@@ -90,7 +90,7 @@ final class MediaModelsTests: XCTestCase {
 
   func testEveryPresetAndVariationStaysWithinParameterBounds() {
     for recipe in FilmRecipeCatalog.all {
-      XCTAssertTrue(recipe.baseParameters.isWithinSupportedBounds, recipe.displayName)
+      XCTAssertTrue(recipe.stages.isWithinSupportedBounds, recipe.displayName)
       for seed in UInt64(0)..<500 {
         let resolved = recipe.resolve(
           seed: seed,
@@ -99,7 +99,7 @@ final class MediaModelsTests: XCTestCase {
           timeZone: .gmt
         )
         XCTAssertTrue(
-          resolved.parameters.isWithinSupportedBounds, "\(recipe.displayName), seed \(seed)")
+          resolved.stages.isWithinSupportedBounds, "\(recipe.displayName), seed \(seed)")
       }
     }
 

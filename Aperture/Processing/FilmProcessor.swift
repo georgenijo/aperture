@@ -236,7 +236,7 @@ final class FilmProcessor: @unchecked Sendable {
     orientation: CGImagePropertyOrientation,
     renderSize: FilmRenderSize
   ) throws -> CIImage {
-    guard recipe.version == 1 else {
+    guard FilmRecipeVersion.supported.contains(recipe.version) else {
       throw FilmProcessorError.unsupportedRecipeVersion(recipe.version)
     }
     let dateStampText = recipe.resolvedSettings.dateStampText
@@ -247,27 +247,37 @@ final class FilmProcessor: @unchecked Sendable {
     let normalized = try Self.normalized(source, orientation: orientation)
     let sized = try Self.scaled(normalized, to: renderSize)
     let bounds = try Self.finiteExtent(sized.extent)
-    let parameters = recipe.parameters
     let decision = FilmProcessingDecision.make(for: recipe)
 
     var image = sized.cropped(to: bounds)
-    image = applyColorGrade(image, parameters: parameters, extent: bounds)
-    image = applyBloom(image, amount: parameters.halation, extent: bounds)
-    image = applySoftness(image, amount: parameters.softness, extent: bounds)
-    image = applyChromaticAberration(
-      image, amount: parameters.chromaticAberration, decision: decision, extent: bounds)
-    image = applyGrain(
-      image, amount: parameters.grainAmount, size: parameters.grainSize, seed: decision.grainSeed,
-      extent: bounds)
-    if let leak = decision.leak {
-      image = applyLightLeak(
-        image, decision: leak, strength: parameters.lightLeakStrength, extent: bounds)
-    }
-    image = applyVignette(image, amount: parameters.vignette, extent: bounds)
-    if let dateStampText,
-      recipe.resolvedSettings.dateStampConfiguration.mode != .off
-    {
-      image = applyDateStamp(image, text: dateStampText, extent: bounds)
+    for stage in recipe.stages {
+      switch stage {
+      case .colorGrade(let grade):
+        image = applyColorGrade(image, grade: grade, extent: bounds)
+      case .halation(let halationStage):
+        image = applyHalation(image, stage: halationStage, extent: bounds)
+      case .softness(let softnessStage):
+        image = applySoftness(image, stage: softnessStage, extent: bounds)
+      case .chromaticAberration(let aberrationStage):
+        image = applyChromaticAberration(
+          image, stage: aberrationStage, decision: decision, extent: bounds)
+      case .grain(let grainStage):
+        image = applyGrain(image, stage: grainStage, seed: decision.grainSeed, extent: bounds)
+      case .lightLeak(let leakStage):
+        if let leak = decision.leak {
+          image = applyLightLeak(
+            image, decision: leak, strength: leakStage.strength, extent: bounds)
+        }
+      case .vignette(let vignetteStage):
+        image = applyVignette(image, stage: vignetteStage, extent: bounds)
+      case .dateStamp(let dateStampStage):
+        if let dateStampText,
+          recipe.resolvedSettings.dateStampConfiguration.mode != .off
+        {
+          image = applyDateStamp(
+            image, text: dateStampText, extent: bounds, style: dateStampStage.style)
+        }
+      }
     }
     return image.cropped(to: bounds)
   }

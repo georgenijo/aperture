@@ -143,11 +143,35 @@ struct FilmParameters: Codable, Hashable, Sendable {
   }
 }
 
+/// The persisted manifest schema. v1 recipes were a flat `FilmParameters`
+/// knob set applied in a hard-coded order; v2 recipes carry that same order
+/// (and, for future recipes, other orders) explicitly as `stages`.
+enum FilmRecipeVersion {
+  static let current = 2
+  static let supported = 1...2
+}
+
 struct FilmRecipe: Codable, Hashable, Identifiable, Sendable {
   let id: FilmRecipeIdentifier
   let version: Int
   let displayName: String
-  let baseParameters: FilmParameters
+  let stages: [FilmStage]
+
+  init(id: FilmRecipeIdentifier, version: Int, displayName: String, stages: [FilmStage]) {
+    self.id = id
+    self.version = version
+    self.displayName = displayName
+    self.stages = stages
+  }
+
+  /// Authoring convenience for the flat v1 knob set: expands to the fixed
+  /// legacy stage order under the hood so every existing recipe definition
+  /// keeps reading the same numbers it always has.
+  init(id: FilmRecipeIdentifier, version: Int, displayName: String, parameters: FilmParameters) {
+    self.init(
+      id: id, version: version, displayName: displayName,
+      stages: FilmStage.legacyPipeline(parameters: parameters, identifier: id))
+  }
 
   func resolve(
     seed: UInt64,
@@ -166,36 +190,43 @@ struct FilmRecipe: Codable, Hashable, Identifiable, Sendable {
     let grainShift = random.value(in: -0.035...0.035)
     let leakEnabled =
       options.lightLeaksEnabled
-      && random.chance(baseParameters.lightLeakProbability)
+      && random.chance(stages.lightLeak?.probability ?? 0)
+    let leakStrengthScale = leakEnabled ? random.value(in: 0.72...1.0) : nil
 
-    let resolved = FilmParameters(
-      exposure: baseParameters.exposure + exposureShift,
-      contrast: baseParameters.contrast,
-      saturation: baseParameters.saturation,
-      warmth: baseParameters.warmth + warmthShift,
-      highlightRolloff: baseParameters.highlightRolloff,
-      shadowCoolness: baseParameters.shadowCoolness,
-      grainAmount: baseParameters.grainAmount + grainShift,
-      grainSize: baseParameters.grainSize,
-      halation: baseParameters.halation,
-      vignette: baseParameters.vignette,
-      softness: baseParameters.softness,
-      chromaticAberration: baseParameters.chromaticAberration,
-      lightLeakProbability: leakEnabled ? baseParameters.lightLeakProbability : 0,
-      lightLeakStrength: leakEnabled
-        ? baseParameters.lightLeakStrength * random.value(in: 0.72...1.0)
-        : 0,
-      channelSplit: baseParameters.channelSplit,
-      blackCrush: baseParameters.blackCrush,
-      shadowTint: baseParameters.shadowTint,
-      highlightTint: baseParameters.highlightTint
-    )
+    let resolvedStages: [FilmStage] = stages.map { stage in
+      switch stage {
+      case .colorGrade(let grade):
+        return .colorGrade(
+          FilmColorGrade(
+            exposure: grade.exposure + exposureShift,
+            contrast: grade.contrast,
+            saturation: grade.saturation,
+            warmth: grade.warmth + warmthShift,
+            highlightRolloff: grade.highlightRolloff,
+            shadowCoolness: grade.shadowCoolness,
+            channelSplit: grade.channelSplit,
+            blackCrush: grade.blackCrush,
+            shadowTint: grade.shadowTint,
+            highlightTint: grade.highlightTint
+          ))
+      case .grain(var grainStage):
+        grainStage.amount = Self.clampUnit(grainStage.amount + grainShift)
+        return .grain(grainStage)
+      case .lightLeak(var leakStage):
+        leakStage.probability = leakEnabled ? leakStage.probability : 0
+        leakStage.strength =
+          leakEnabled ? Self.clampUnit(leakStage.strength * (leakStrengthScale ?? 1)) : 0
+        return .lightLeak(leakStage)
+      default:
+        return stage
+      }
+    }
 
     return AppliedFilmRecipe(
       identifier: id,
       version: version,
       seed: seed,
-      parameters: resolved,
+      stages: resolvedStages,
       resolvedSettings: FilmResolvedSettings(
         lightLeakApplied: leakEnabled,
         dateStampConfiguration: stampConfiguration,
@@ -208,6 +239,11 @@ struct FilmRecipe: Codable, Hashable, Identifiable, Sendable {
         compressionQuality: options.photoQuality.compressionQuality
       )
     )
+  }
+
+  private static func clampUnit(_ value: Double) -> Double {
+    guard value.isFinite else { return 0 }
+    return min(max(value, 0), 1)
   }
 }
 
@@ -273,15 +309,73 @@ struct FilmResolvedSettings: Codable, Hashable, Sendable {
   }
 }
 
-struct AppliedFilmRecipe: Codable, Hashable, Sendable {
+struct AppliedFilmRecipe: Hashable, Sendable {
   let identifier: FilmRecipeIdentifier
   let version: Int
   let seed: UInt64
-  let parameters: FilmParameters
+  let stages: [FilmStage]
   let resolvedSettings: FilmResolvedSettings
+
+  init(
+    identifier: FilmRecipeIdentifier,
+    version: Int,
+    seed: UInt64,
+    stages: [FilmStage],
+    resolvedSettings: FilmResolvedSettings
+  ) {
+    self.identifier = identifier
+    self.version = version
+    self.seed = seed
+    self.stages = stages
+    self.resolvedSettings = resolvedSettings
+  }
 
   /// Convenience access to the persisted still-encoding quality.
   var compressionQuality: Double { resolvedSettings.compressionQuality }
+  var colorGrade: FilmColorGrade { stages.colorGrade ?? .neutral }
+  var halation: HalationStage? { stages.halation }
+  var softness: SoftnessStage? { stages.softness }
+  var chromaticAberration: ChromaticAberrationStage? { stages.chromaticAberration }
+  var grain: GrainStage? { stages.grain }
+  var lightLeak: LightLeakStage? { stages.lightLeak }
+  var vignette: VignetteStage? { stages.vignette }
+  var dateStamp: DateStampStage? { stages.dateStamp }
+}
+
+extension AppliedFilmRecipe: Codable {
+  private enum CodingKeys: String, CodingKey {
+    case identifier, version, seed, stages, parameters, resolvedSettings
+  }
+
+  init(from decoder: Decoder) throws {
+    let values = try decoder.container(keyedBy: CodingKeys.self)
+    let identifier = try values.decode(FilmRecipeIdentifier.self, forKey: .identifier)
+    let stages: [FilmStage]
+    if let decodedStages = try values.decodeIfPresent([FilmStage].self, forKey: .stages) {
+      stages = decodedStages
+    } else {
+      // Pre-#17 manifests persisted a flat `FilmParameters` knob set; expand
+      // it into the equivalent fixed-order stage list on read.
+      let legacyParameters = try values.decode(FilmParameters.self, forKey: .parameters)
+      stages = FilmStage.legacyPipeline(parameters: legacyParameters, identifier: identifier)
+    }
+    self.init(
+      identifier: identifier,
+      version: try values.decode(Int.self, forKey: .version),
+      seed: try values.decode(UInt64.self, forKey: .seed),
+      stages: stages,
+      resolvedSettings: try values.decode(FilmResolvedSettings.self, forKey: .resolvedSettings)
+    )
+  }
+
+  func encode(to encoder: Encoder) throws {
+    var container = encoder.container(keyedBy: CodingKeys.self)
+    try container.encode(identifier, forKey: .identifier)
+    try container.encode(version, forKey: .version)
+    try container.encode(seed, forKey: .seed)
+    try container.encode(stages, forKey: .stages)
+    try container.encode(resolvedSettings, forKey: .resolvedSettings)
+  }
 }
 
 enum FilmRecipeCatalog {
@@ -289,12 +383,12 @@ enum FilmRecipeCatalog {
 
   static let nineteenNinetyEight = FilmRecipe(
     id: .nineteenNinetyEight,
-    version: 1,
+    version: FilmRecipeVersion.current,
     displayName: "1998",
     // Huji's signature is a dense disposable-camera curve with vivid source
     // colours, cool shade, warm skin/wood, and imperfect optics. Avoid broad
     // split tints here: they turn neutral walls and white highlights pink.
-    baseParameters: FilmParameters(
+    parameters: FilmParameters(
       exposure: 0.015, contrast: 1.22, saturation: 1.42, warmth: 0.10,
       highlightRolloff: 0.16, shadowCoolness: 0.42,
       grainAmount: 0.24, grainSize: 0.56, halation: 0.16,
@@ -308,9 +402,9 @@ enum FilmRecipeCatalog {
 
   static let night = FilmRecipe(
     id: .night,
-    version: 1,
+    version: FilmRecipeVersion.current,
     displayName: "Night",
-    baseParameters: FilmParameters(
+    parameters: FilmParameters(
       exposure: -0.08, contrast: 1.24, saturation: 1.06, warmth: 0.08,
       highlightRolloff: 0.66, shadowCoolness: 0.34,
       grainAmount: 0.42, grainSize: 1.1, halation: 0.48,
@@ -321,9 +415,9 @@ enum FilmRecipeCatalog {
 
   static let cinema = FilmRecipe(
     id: .cinema,
-    version: 1,
+    version: FilmRecipeVersion.current,
     displayName: "Cinema",
-    baseParameters: FilmParameters(
+    parameters: FilmParameters(
       exposure: 0, contrast: 0.94, saturation: 0.88, warmth: 0.06,
       highlightRolloff: 0.74, shadowCoolness: 0.18,
       grainAmount: 0.17, grainSize: 0.72, halation: 0.18,
@@ -334,9 +428,9 @@ enum FilmRecipeCatalog {
 
   static let legacyOriginal = FilmRecipe(
     id: .legacyOriginal,
-    version: 1,
+    version: FilmRecipeVersion.current,
     displayName: "Original Capture",
-    baseParameters: FilmParameters(
+    parameters: FilmParameters(
       exposure: 0, contrast: 1, saturation: 1, warmth: 0,
       highlightRolloff: 0, shadowCoolness: 0,
       grainAmount: 0, grainSize: 1, halation: 0,

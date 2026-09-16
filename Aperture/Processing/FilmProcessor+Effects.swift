@@ -29,34 +29,45 @@ enum FilmColorCube {
 }
 
 extension FilmProcessor {
-  func applyColorGrade(_ image: CIImage, parameters: FilmParameters, extent: CGRect) -> CIImage {
-    FilmColorCube.apply(
-      image, cubeData: FilmColorCube.data(grade: parameters.colorGrade), extent: extent)
+  func applyColorGrade(_ image: CIImage, grade: FilmColorGrade, extent: CGRect) -> CIImage {
+    FilmColorCube.apply(image, cubeData: FilmColorCube.data(grade: grade), extent: extent)
   }
 
-  func applyBloom(_ image: CIImage, amount: Double, extent: CGRect) -> CIImage {
-    guard amount > 0.001,
+  func applyHalation(_ image: CIImage, stage: HalationStage, extent: CGRect) -> CIImage {
+    guard stage.amount > stage.minimumAmount,
       let bloom = CIFilter(name: "CIBloom")
     else { return image }
     bloom.setValue(image, forKey: kCIInputImageKey)
-    bloom.setValue(min(1, amount * 0.75), forKey: kCIInputIntensityKey)
-    bloom.setValue(max(1, extent.width * 0.012 * CGFloat(amount)), forKey: kCIInputRadiusKey)
+    bloom.setValue(
+      min(stage.intensityCap, stage.amount * stage.intensityScale), forKey: kCIInputIntensityKey)
+    bloom.setValue(
+      max(CGFloat(stage.minimumRadius), extent.width * CGFloat(stage.radiusScale) * CGFloat(stage.amount)),
+      forKey: kCIInputRadiusKey)
     guard var bloomImage = bloom.outputImage?.cropped(to: extent) else { return image }
     if let warm = CIFilter(name: "CIColorMatrix") {
-      let warmth = CGFloat(amount)
+      let warmth = CGFloat(stage.amount)
       warm.setValue(bloomImage, forKey: kCIInputImageKey)
-      warm.setValue(CIVector(x: 1 + warmth * 0.20, y: 0, z: 0, w: 0), forKey: "inputRVector")
-      warm.setValue(CIVector(x: 0, y: 1 + warmth * 0.04, z: 0, w: 0), forKey: "inputGVector")
-      warm.setValue(CIVector(x: 0, y: 0, z: 1 - warmth * 0.10, w: 0), forKey: "inputBVector")
+      warm.setValue(
+        CIVector(x: 1 + warmth * CGFloat(stage.warmRedGain), y: 0, z: 0, w: 0),
+        forKey: "inputRVector")
+      warm.setValue(
+        CIVector(x: 0, y: 1 + warmth * CGFloat(stage.warmGreenGain), z: 0, w: 0),
+        forKey: "inputGVector")
+      warm.setValue(
+        CIVector(x: 0, y: 0, z: 1 - warmth * CGFloat(stage.warmBlueGain), w: 0),
+        forKey: "inputBVector")
       warm.setValue(CIVector(x: 0, y: 0, z: 0, w: 1), forKey: "inputAVector")
       bloomImage = warm.outputImage?.cropped(to: extent) ?? bloomImage
     }
     return blend(
-      bloomImage, over: image, opacity: min(0.68, CGFloat(amount) * 0.82), extent: extent)
+      bloomImage, over: image,
+      opacity: min(
+        CGFloat(stage.blendOpacityCap), CGFloat(stage.amount) * CGFloat(stage.blendOpacityScale)),
+      extent: extent)
   }
 
-  func applySoftness(_ image: CIImage, amount: Double, extent: CGRect) -> CIImage {
-    guard amount > 0.001 else { return image }
+  func applySoftness(_ image: CIImage, stage: SoftnessStage, extent: CGRect) -> CIImage {
+    guard stage.amount > stage.minimumAmount else { return image }
 
     // Cheap plastic lenses stay reasonably sharp in the centre but smear
     // detail radially near the frame edges. A global Gaussian blur looked
@@ -66,18 +77,24 @@ extension FilmProcessor {
     guard let zoomBlur = CIFilter(name: "CIZoomBlur") else { return image }
     zoomBlur.setValue(image.clampedToExtent(), forKey: kCIInputImageKey)
     zoomBlur.setValue(centre, forKey: kCIInputCenterKey)
-    zoomBlur.setValue(shortestSide * 0.0026 * CGFloat(amount), forKey: kCIInputAmountKey)
+    zoomBlur.setValue(
+      shortestSide * CGFloat(stage.zoomBlurScale) * CGFloat(stage.amount),
+      forKey: kCIInputAmountKey)
     guard let softened = zoomBlur.outputImage?.cropped(to: extent) else { return image }
 
     guard let radial = CIFilter(name: "CIRadialGradient"),
       let masked = CIFilter(name: "CIBlendWithMask")
     else {
       return blend(
-        softened, over: image, opacity: min(0.42, CGFloat(amount) * 0.55), extent: extent)
+        softened, over: image,
+        opacity: min(
+          CGFloat(stage.fallbackBlendOpacityCap),
+          CGFloat(stage.amount) * CGFloat(stage.fallbackBlendOpacityScale)),
+        extent: extent)
     }
     radial.setValue(centre, forKey: kCIInputCenterKey)
-    radial.setValue(shortestSide * 0.38, forKey: "inputRadius0")
-    radial.setValue(shortestSide * 0.78, forKey: "inputRadius1")
+    radial.setValue(shortestSide * CGFloat(stage.innerRadiusScale), forKey: "inputRadius0")
+    radial.setValue(shortestSide * CGFloat(stage.outerRadiusScale), forKey: "inputRadius1")
     radial.setValue(CIColor.black, forKey: "inputColor0")
     radial.setValue(CIColor.white, forKey: "inputColor1")
     guard let edgeMask = radial.outputImage?.cropped(to: extent) else { return image }
@@ -89,15 +106,19 @@ extension FilmProcessor {
 
   func applyChromaticAberration(
     _ image: CIImage,
-    amount: Double,
+    stage: ChromaticAberrationStage,
     decision: FilmProcessingDecision,
     extent: CGRect
   ) -> CIImage {
-    guard amount > 0.0005 else { return image }
+    guard stage.amount > stage.minimumAmount else { return image }
     let direction: CGFloat = decision.seed & 1 == 0 ? 1 : -1
-    let redScale = 1 + 0.0048 * CGFloat(amount) * CGFloat(decision.redChannelShift)
-    let blueScale = 1 - 0.0042 * CGFloat(amount) * CGFloat(decision.blueChannelShift)
-    let lateralShift = min(extent.width, extent.height) * 0.00045 * CGFloat(amount) * direction
+    let redScale =
+      1 + CGFloat(stage.redGain) * CGFloat(stage.amount) * CGFloat(decision.redChannelShift)
+    let blueScale =
+      1 - CGFloat(stage.blueGain) * CGFloat(stage.amount) * CGFloat(decision.blueChannelShift)
+    let lateralShift =
+      min(extent.width, extent.height) * CGFloat(stage.lateralShiftScale) * CGFloat(stage.amount)
+      * direction
     // Scale the red and blue records around the optical centre. Separation
     // increases toward the edges, unlike the old uniform horizontal shift.
     guard
@@ -117,13 +138,12 @@ extension FilmProcessor {
 
   func applyGrain(
     _ image: CIImage,
-    amount: Double,
-    size: Double,
+    stage: GrainStage,
     seed: UInt64,
     extent: CGRect
   ) -> CIImage {
-    guard amount > 0.001,
-      let noise = Self.makeNoiseImage(extent: extent, grainSize: size, seed: seed)
+    guard stage.amount > stage.minimumAmount,
+      let noise = Self.makeNoiseImage(extent: extent, grainSize: stage.size, seed: seed)
     else { return image }
     guard let noiseMatrix = CIFilter(name: "CIColorMatrix"),
       let luminanceMatrix = CIFilter(name: "CIColorMatrix"),
@@ -132,14 +152,16 @@ extension FilmProcessor {
       let added = CIFilter(name: "CIAdditionCompositing")
     else { return image }
 
-    let gain = CGFloat(min(1, amount) * 0.23)
+    let gain = CGFloat(min(stage.gainCap, stage.amount) * stage.gainScale)
     noiseMatrix.setValue(noise, forKey: kCIInputImageKey)
     noiseMatrix.setValue(CIVector(x: gain, y: 0, z: 0, w: 0), forKey: "inputRVector")
     noiseMatrix.setValue(CIVector(x: 0, y: gain, z: 0, w: 0), forKey: "inputGVector")
     noiseMatrix.setValue(CIVector(x: 0, y: 0, z: gain, w: 0), forKey: "inputBVector")
     noiseMatrix.setValue(CIVector(x: 0, y: 0, z: 0, w: 1), forKey: "inputAVector")
     noiseMatrix.setValue(
-      CIVector(x: -gain * 0.5, y: -gain * 0.5, z: -gain * 0.5, w: 0), forKey: "inputBiasVector")
+      CIVector(
+        x: -gain * CGFloat(stage.biasScale), y: -gain * CGFloat(stage.biasScale),
+        z: -gain * CGFloat(stage.biasScale), w: 0), forKey: "inputBiasVector")
     guard let centeredNoise = noiseMatrix.outputImage?.cropped(to: extent) else { return image }
 
     luminanceMatrix.setValue(image, forKey: kCIInputImageKey)
@@ -152,9 +174,12 @@ extension FilmProcessor {
       return image
     }
 
-    // 0.25 + 3L - 3L²: strongest around midtones, restrained at ends.
+    // constant + linear·L + quadratic·L²: strongest around midtones by
+    // default, restrained at ends.
     luminanceCurve.setValue(luminanceImage, forKey: kCIInputImageKey)
-    let coefficients = CIVector(x: 0.25, y: 3, z: -3, w: 0)
+    let coefficients = CIVector(
+      x: CGFloat(stage.curveConstant), y: CGFloat(stage.curveLinear),
+      z: CGFloat(stage.curveQuadratic), w: 0)
     luminanceCurve.setValue(coefficients, forKey: "inputRedCoefficients")
     luminanceCurve.setValue(coefficients, forKey: "inputGreenCoefficients")
     luminanceCurve.setValue(coefficients, forKey: "inputBlueCoefficients")
@@ -185,18 +210,23 @@ extension FilmProcessor {
     return composite.outputImage?.cropped(to: extent) ?? image
   }
 
-  func applyVignette(_ image: CIImage, amount: Double, extent: CGRect) -> CIImage {
-    guard amount > 0.001,
+  func applyVignette(_ image: CIImage, stage: VignetteStage, extent: CGRect) -> CIImage {
+    guard stage.amount > stage.minimumAmount,
       let vignette = CIFilter(name: "CIVignette")
     else { return image }
     vignette.setValue(image, forKey: kCIInputImageKey)
-    vignette.setValue(min(1, amount * 0.74), forKey: kCIInputIntensityKey)
-    vignette.setValue(max(0.1, min(extent.width, extent.height) * 0.68), forKey: kCIInputRadiusKey)
+    vignette.setValue(
+      min(stage.intensityCap, stage.amount * stage.intensityScale), forKey: kCIInputIntensityKey)
+    vignette.setValue(
+      max(CGFloat(stage.minimumRadius), min(extent.width, extent.height) * CGFloat(stage.radiusScale)),
+      forKey: kCIInputRadiusKey)
     return vignette.outputImage?.cropped(to: extent) ?? image
   }
 
-  func applyDateStamp(_ image: CIImage, text: String, extent: CGRect) -> CIImage {
-    guard let stamp = FilmOverlayFactory.dateStampImage(text: text, extent: extent),
+  func applyDateStamp(
+    _ image: CIImage, text: String, extent: CGRect, style: DateStampStage.Style = .monospaced
+  ) -> CIImage {
+    guard let stamp = FilmOverlayFactory.dateStampImage(text: text, extent: extent, style: style),
       let composite = CIFilter(name: "CISourceOverCompositing")
     else { return image }
     composite.setValue(stamp, forKey: kCIInputImageKey)
