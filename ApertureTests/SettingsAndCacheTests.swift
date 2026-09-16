@@ -31,6 +31,53 @@ final class SettingsAndCacheTests: XCTestCase {
     XCTAssertEqual(try store.load(), .defaults)
   }
 
+  /// Settings written before the full-screen viewfinder key existed must keep
+  /// loading. A missing key is an older payload, not a corrupt one, and
+  /// treating it as corrupt would silently reset someone's preferences.
+  func testSettingsWrittenBeforeFullScreenKeyStillLoad() throws {
+    let suiteName = "ApertureTests.Settings.\(UUID().uuidString)"
+    let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+    defer { defaults.removePersistentDomain(forName: suiteName) }
+    let store = SettingsStore(defaults: defaults, key: "settings")
+
+    // Deliberately non-default, so the assertion can tell "loaded correctly"
+    // apart from "quietly reset to defaults".
+    var saved = AppSettings.defaults
+    saved.selectedFilm = .cinema
+    saved.lightLeaksEnabled = false
+    saved.hapticsEnabled = false
+    saved.autoSaveToPhotos = true
+    saved.preserveOriginal = false
+    saved.photoQuality = .maximum
+    saved.filmRollModeEnabled = true
+
+    var legacy = try XCTUnwrap(
+      try JSONSerialization.jsonObject(
+        with: ApertureJSON.makeEncoder().encode(saved)
+      ) as? [String: Any]
+    )
+    legacy.removeValue(forKey: "fullScreenViewfinderEnabled")
+    XCTAssertNil(legacy["fullScreenViewfinderEnabled"])
+    defaults.set(try JSONSerialization.data(withJSONObject: legacy), forKey: "settings")
+
+    let loaded = try store.load()
+    XCTAssertFalse(loaded.fullScreenViewfinderEnabled)
+    XCTAssertEqual(loaded, saved)
+    XCTAssertNotEqual(loaded, AppSettings.defaults)
+  }
+
+  func testFullScreenViewfinderSettingRoundTrips() throws {
+    let suiteName = "ApertureTests.Settings.\(UUID().uuidString)"
+    let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+    defer { defaults.removePersistentDomain(forName: suiteName) }
+    let store = SettingsStore(defaults: defaults, key: "settings")
+
+    var settings = AppSettings.defaults
+    settings.fullScreenViewfinderEnabled = true
+    try store.save(settings)
+    XCTAssertTrue(try store.load().fullScreenViewfinderEnabled)
+  }
+
   func testSettingsStoreReportsCorruptPayload() throws {
     let suiteName = "ApertureTests.Settings.\(UUID().uuidString)"
     let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))

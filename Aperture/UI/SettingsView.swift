@@ -80,6 +80,23 @@ struct SettingsView: View {
             }
           }
 
+          settingsGroup("Viewfinder", detail: "How the live image fills the screen") {
+            settingRow("Full screen", detail: "Edge-to-edge preview, floating controls") {
+              Toggle("Full screen", isOn: setting(\.fullScreenViewfinderEnabled))
+                .labelsHidden()
+                .tint(ApertureStyle.amber)
+                .accessibilityLabel("Full Screen Viewfinder")
+            }
+            Text(
+              "The preview fills the screen and crops what you see. Photos and films are still captured at the camera's own framing."
+            )
+            .font(.caption)
+            .foregroundStyle(ApertureStyle.muted)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.horizontal, 16)
+            .padding(.bottom, 15)
+          }
+
           settingsGroup("Photos", detail: "Exports are always initiated by you") {
             settingRow("Auto-save developed media", detail: "Add finished frames to Photos") {
               Toggle("Auto-save developed media", isOn: setting(\.autoSaveToPhotos))

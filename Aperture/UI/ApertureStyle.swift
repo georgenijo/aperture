@@ -28,19 +28,45 @@ enum ApertureStyle {
   }
 }
 
+extension View {
+  /// Controls that sit on the app's own dark surface need no help. Over a
+  /// live image they do, so full-screen mode carries a soft drop shadow
+  /// rather than a scrim that would dim the photograph.
+  @ViewBuilder
+  func cameraControlLegibility(_ isOverLiveImage: Bool) -> some View {
+    if isOverLiveImage {
+      shadow(color: .black.opacity(0.55), radius: 6, x: 0, y: 1)
+    } else {
+      self
+    }
+  }
+}
+
 struct ApertureIconButtonStyle: ButtonStyle {
   @Environment(\.isEnabled) private var isEnabled
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
+  /// Over a live image the disc and its hairline disappear and only the glyph
+  /// remains. This is a parameter rather than a second style so the button
+  /// keeps one identity, and so Reduce Motion is still read from the
+  /// environment of the style that SwiftUI actually installs.
+  var isTransparent = false
+
   func makeBody(configuration: Configuration) -> some View {
-    configuration.label
-      .frame(width: ApertureStyle.controlSize, height: ApertureStyle.controlSize)
+    let side = isTransparent ? ApertureStyle.bareControlSize : ApertureStyle.controlSize
+    return configuration.label
+      .font(isTransparent ? .system(size: 18, weight: .medium) : nil)
+      .frame(width: side, height: side)
       .foregroundStyle(ApertureStyle.bone.opacity(isEnabled ? 1 : 0.4))
       .background(
         Circle()
-          .fill(ApertureStyle.panel.opacity(configuration.isPressed ? 0.98 : 0.86))
+          .fill(
+            ApertureStyle.panel
+              .opacity(isTransparent ? 0 : (configuration.isPressed ? 0.98 : 0.86)))
       )
-      .overlay(Circle().stroke(ApertureStyle.line, lineWidth: 1))
+      .overlay(Circle().stroke(isTransparent ? Color.clear : ApertureStyle.line, lineWidth: 1))
+      .contentShape(Circle())
+      .opacity(isTransparent && configuration.isPressed ? 0.6 : 1)
       .scaleEffect(reduceMotion ? 1 : (configuration.isPressed ? 0.94 : 1))
       .animation(reduceMotion ? nil : .easeOut(duration: 0.12), value: configuration.isPressed)
   }

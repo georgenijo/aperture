@@ -119,13 +119,26 @@ struct ContentView: View {
         }
       }
     }
+    // The layout below measures from the physical screen and insets the
+    // controls itself, so this reader has to span the unsafe regions too.
+    // Without it a full-screen preview stops at the status bar and the home
+    // indicator. On a region that already spans the screen this is a no-op.
+    .ignoresSafeArea()
   }
 
   private enum Layout {
-    /// One row of 44pt controls plus breathing room above the image.
-    static let portraitTopReserve: CGFloat = 56
+    /// One row of 44pt controls and little else. Every point taken off this
+    /// reserve is a point the image gains, which matters most in video mode
+    /// where the 16:9 preview is height-bound rather than width-bound.
+    static let portraitTopReserve: CGFloat = 48
     /// Mode strip, shutter row, and their spacing below the image.
     static let portraitBottomReserve: CGFloat = 156
+  }
+
+  /// Edge-to-edge preview with the controls floating over it, rather than an
+  /// aspect-correct image framed by the app's own surface.
+  private var isFullScreenViewfinder: Bool {
+    model.settings.fullScreenViewfinderEnabled
   }
 
   private var previewAspectRatio: CGFloat {
@@ -153,19 +166,33 @@ struct ContentView: View {
         proxy.size.height - safeTop - safeBottom - Layout.portraitTopReserve
           - Layout.portraitBottomReserve)
     let orientedPreviewAspectRatio = isLandscape ? previewAspectRatio : 1 / previewAspectRatio
-    let previewWidth = min(availableWidth, availableHeight * orientedPreviewAspectRatio)
-    let previewHeight = previewWidth / orientedPreviewAspectRatio
-    let previewCenterX = safeLeading + (availableWidth / 2)
-    let previewCenterY = isLandscape
-      ? safeTop + (availableHeight / 2)
-      : safeTop + Layout.portraitTopReserve + (previewHeight / 2)
+    let framedWidth = min(availableWidth, availableHeight * orientedPreviewAspectRatio)
+    // The preview layer already fills by aspect, so a full-screen frame crops
+    // the sensor image rather than stretching it. Capture framing is unchanged.
+    let previewWidth = isFullScreenViewfinder ? proxy.size.width : framedWidth
+    let previewHeight =
+      isFullScreenViewfinder ? proxy.size.height : framedWidth / orientedPreviewAspectRatio
+    let previewCenterX =
+      isFullScreenViewfinder ? proxy.size.width / 2 : safeLeading + (availableWidth / 2)
+    let previewCenterY: CGFloat
+    if isFullScreenViewfinder {
+      previewCenterY = proxy.size.height / 2
+    } else if isLandscape {
+      previewCenterY = safeTop + (availableHeight / 2)
+    } else {
+      previewCenterY = safeTop + Layout.portraitTopReserve + (previewHeight / 2)
+    }
 
     return ZStack(alignment: .topLeading) {
       viewfinder
         .frame(width: previewWidth, height: previewHeight)
         .overlay(alignment: .bottom) {
-          lensRail
-            .padding(.bottom, 10)
+          // Full-screen mode moves the rail into the control dock, where it
+          // cannot land underneath the shutter.
+          if !isFullScreenViewfinder {
+            lensRail
+              .padding(.bottom, 10)
+          }
         }
         .position(x: previewCenterX, y: previewCenterY)
 
@@ -198,9 +225,11 @@ struct ContentView: View {
         }
         filmButton
         Spacer(minLength: 4)
+        if isFullScreenViewfinder { lensRail }
         modeRow
         shutterRow
       }
+      .cameraControlLegibility(isFullScreenViewfinder)
       .padding(.horizontal, 12)
       .padding(.top, safeTop + 8)
       .padding(.bottom, safeBottom)
@@ -215,6 +244,7 @@ struct ContentView: View {
         Spacer(minLength: 0)
         bottomBar
       }
+      .cameraControlLegibility(isFullScreenViewfinder)
       .padding(.top, safeTop)
       .padding(.bottom, safeBottom)
       .frame(width: proxy.size.width, height: proxy.size.height)
@@ -264,7 +294,7 @@ struct ContentView: View {
       filmButton
     }
     .padding(.horizontal, 12)
-    .padding(.top, 6)
+    .padding(.top, 2)
   }
 
   @ViewBuilder
@@ -321,7 +351,7 @@ struct ContentView: View {
     } label: {
       Image(systemName: "arrow.triangle.2.circlepath.camera")
     }
-    .buttonStyle(ApertureIconButtonStyle())
+    .buttonStyle(ApertureIconButtonStyle(isTransparent: isFullScreenViewfinder))
     .accessibilityLabel("Switch camera")
     .accessibilityHint("Switch between the back and front cameras")
   }
@@ -341,7 +371,8 @@ struct ContentView: View {
   private var lensRail: some View {
     CameraZoomControl(
       options: model.cameraManager.capabilities.lensOptions,
-      selectedDisplayZoom: model.cameraManager.currentDisplayZoom
+      selectedDisplayZoom: model.cameraManager.currentDisplayZoom,
+      isTransparent: isFullScreenViewfinder
     ) { option in
       model.zoom(to: option.rawZoomFactor)
     }
@@ -349,6 +380,7 @@ struct ContentView: View {
 
   private var bottomBar: some View {
     VStack(spacing: 10) {
+      if isFullScreenViewfinder { lensRail }
       modeRow
       shutterRow
     }
@@ -436,11 +468,15 @@ struct ContentView: View {
           )
         } else {
           RoundedRectangle(cornerRadius: 10, style: .continuous)
-            .fill(ApertureStyle.panel)
+            .fill(isFullScreenViewfinder ? Color.clear : ApertureStyle.panel)
             .frame(width: 48, height: 48)
             .overlay(
               RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .stroke(ApertureStyle.line, lineWidth: 1)
+                // With no fill behind it the outline is the only affordance,
+                // so it carries more contrast over a live image.
+                .stroke(
+                  isFullScreenViewfinder ? ApertureStyle.bone.opacity(0.75) : ApertureStyle.line,
+                  lineWidth: 1)
             )
         }
         if !model.processingIDs.isEmpty {

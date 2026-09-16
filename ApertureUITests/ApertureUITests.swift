@@ -78,7 +78,9 @@ final class ApertureUITests: XCTestCase {
     app.buttons["lab-select"].tap()
     XCTAssertTrue(app.buttons["lab-item-\(seedID)"].waitForExistence(timeout: 5))
     app.buttons["lab-item-\(seedID)"].tap()
-    XCTAssertTrue(app.buttons["lab-export"].exists)
+    // The bottom bar only renders once the selection is non-empty, so the
+    // first check has to wait for that render rather than sample immediately.
+    XCTAssertTrue(app.buttons["lab-export"].waitForExistence(timeout: 5))
     XCTAssertTrue(app.buttons["lab-share"].exists)
     XCTAssertTrue(app.buttons["lab-delete"].exists)
 

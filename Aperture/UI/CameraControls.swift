@@ -10,15 +10,18 @@ import SwiftUI
 struct CameraZoomControl: View {
   let options: [LensOption]
   let selectedDisplayZoom: CGFloat
+  let isTransparent: Bool
   let onSelect: (LensOption) -> Void
 
   init(
     options: [LensOption],
     selectedDisplayZoom: CGFloat,
+    isTransparent: Bool = false,
     onSelect: @escaping (LensOption) -> Void
   ) {
     self.options = options
     self.selectedDisplayZoom = selectedDisplayZoom
+    self.isTransparent = isTransparent
     self.onSelect = onSelect
   }
 
@@ -32,7 +35,7 @@ struct CameraZoomControl: View {
             optionButton(for: option)
           }
         }
-        .background(.black.opacity(0.5), in: Capsule())
+        .background(.black.opacity(isTransparent ? 0 : 0.5), in: Capsule())
         .fixedSize(horizontal: true, vertical: true)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Camera zoom")
