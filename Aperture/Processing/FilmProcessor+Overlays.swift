@@ -132,16 +132,21 @@ enum FilmOverlayFactory {
   ) -> CGPath {
     let path = CGMutablePath()
     guard let lit = sevenSegmentTable[digit] else { return path }
-    let gap = t * 0.18
-    let horizontalWidth = max(0, bw - t)
+    // Classic LED layout: the three horizontal bars sit between the vertical
+    // bars (not over them), and every bar stops one `gap` short of its
+    // neighbours so the segments read as separate lit strips rather than a
+    // fused blob or a row of dots.
+    let gap = t * 0.30
+    let horizontalX = t + gap
+    let horizontalWidth = max(0, bw - 2 * (t + gap))
     if lit.contains("a") {
-      path.addRect(CGRect(x: t / 2, y: bh - t, width: horizontalWidth, height: t))
+      path.addRect(CGRect(x: horizontalX, y: bh - t, width: horizontalWidth, height: t))
     }
     if lit.contains("d") {
-      path.addRect(CGRect(x: t / 2, y: 0, width: horizontalWidth, height: t))
+      path.addRect(CGRect(x: horizontalX, y: 0, width: horizontalWidth, height: t))
     }
     if lit.contains("g") {
-      path.addRect(CGRect(x: t / 2, y: (bh - t) / 2, width: horizontalWidth, height: t))
+      path.addRect(CGRect(x: horizontalX, y: (bh - t) / 2, width: horizontalWidth, height: t))
     }
     let topVertStart = bh / 2 + t / 2 + gap
     let topVertEnd = bh - t - gap
@@ -182,13 +187,13 @@ enum FilmOverlayFactory {
   /// this path into place with a CGContext transform.
   private static func sevenSegmentPath(for text: String, fontSize: CGFloat) -> CGPath {
     let path = CGMutablePath()
-    let thickness = fontSize * 0.14
+    let thickness = fontSize * 0.11
     var x: CGFloat = 0
     for character in text {
       let advance = FilmDateStampLayout.sevenSegmentAdvance(for: character, fontSize: fontSize)
       if character.isNumber, let digit = character.wholeNumberValue, (0...9).contains(digit) {
-        let boxWidth = fontSize * 0.42
-        let boxHeight = fontSize * 0.86
+        let boxWidth = fontSize * 0.50
+        let boxHeight = fontSize * 0.92
         let dx = x + max(0, (advance - boxWidth) / 2)
         let dy = (fontSize - boxHeight) / 2
         let digitPath = sevenSegmentDigitPath(
