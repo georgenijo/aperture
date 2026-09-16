@@ -119,18 +119,14 @@ struct ContentView: View {
         }
       }
     }
-    // The layout below measures from the physical screen and insets the
-    // controls itself, so this reader has to span the unsafe regions too.
-    // Without it a full-screen preview stops at the status bar and the home
-    // indicator. On a region that already spans the screen this is a no-op.
-    .ignoresSafeArea()
   }
 
   private enum Layout {
-    /// One row of 44pt controls and little else. Every point taken off this
-    /// reserve is a point the image gains, which matters most in video mode
-    /// where the 16:9 preview is height-bound rather than width-bound.
-    static let portraitTopReserve: CGFloat = 48
+    /// One row of 44pt controls, the gap that keeps them clear of the status
+    /// bar, and a little air above the image. In photo mode the 4:3 preview
+    /// is width-bound, so trimming this does not enlarge it; full-screen mode
+    /// is what actually grows the image.
+    static let portraitTopReserve: CGFloat = 60
     /// Mode strip, shutter row, and their spacing below the image.
     static let portraitBottomReserve: CGFloat = 156
   }
@@ -184,17 +180,22 @@ struct ContentView: View {
     }
 
     return ZStack(alignment: .topLeading) {
-      viewfinder
-        .frame(width: previewWidth, height: previewHeight)
-        .overlay(alignment: .bottom) {
-          // Full-screen mode moves the rail into the control dock, where it
-          // cannot land underneath the shutter.
-          if !isFullScreenViewfinder {
+      if isFullScreenViewfinder {
+        // Filling rather than framing: a flexible view that ignores the safe
+        // area covers the status bar and home indicator, which an explicitly
+        // framed one cannot. The rail moves to the dock in this mode, so the
+        // preview carries no overlay.
+        viewfinder
+          .ignoresSafeArea()
+      } else {
+        viewfinder
+          .frame(width: previewWidth, height: previewHeight)
+          .overlay(alignment: .bottom) {
             lensRail
               .padding(.bottom, 10)
           }
-        }
-        .position(x: previewCenterX, y: previewCenterY)
+          .position(x: previewCenterX, y: previewCenterY)
+      }
 
       cameraChrome(
         proxy: proxy,
@@ -294,7 +295,9 @@ struct ContentView: View {
       filmButton
     }
     .padding(.horizontal, 12)
-    .padding(.top, 2)
+    // The status bar sits directly above this row, so the controls need a
+    // gap they can be tapped in rather than a hairline.
+    .padding(.top, 10)
   }
 
   @ViewBuilder
