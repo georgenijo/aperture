@@ -102,7 +102,7 @@ final class FilmProcessorTests: XCTestCase {
       settingsAtNaN.compressionQuality, PhotoQualityPreference.balanced.compressionQuality)
   }
 
-  func testLegacyResolvedSettingsDecodeDefaultsToBalancedQuality() throws {
+  func testLegacyResolvedSettingsDecodeToTheFrozenHistoricalBalancedQuality() throws {
     let legacyPayload = Data(
       """
       {
@@ -119,7 +119,11 @@ final class FilmProcessorTests: XCTestCase {
     )
 
     let decoded = try JSONDecoder().decode(FilmResolvedSettings.self, from: legacyPayload)
-    XCTAssertEqual(decoded.compressionQuality, PhotoQualityPreference.balanced.compressionQuality)
+    // Frozen at the Balanced value that was current when such manifests were
+    // written; raising the preference (0.88 → 0.92) must not re-encode them.
+    XCTAssertEqual(decoded.compressionQuality, 0.88)
+    XCTAssertEqual(FilmResolvedSettings.legacyCompressionQuality, 0.88)
+    XCTAssertNotEqual(decoded.compressionQuality, PhotoQualityPreference.balanced.compressionQuality)
   }
 
   func testPersistedDateStampTextAndLayoutScaleTogether() throws {

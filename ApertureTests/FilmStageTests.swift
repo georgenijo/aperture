@@ -93,6 +93,63 @@ final class FilmStageTests: XCTestCase {
     }
   }
 
+  // MARK: 2b. Stage-schema-2 wire format keeps its rendering semantics
+
+  func testSchemaTwoChromaticAberrationAndHalationDecodeWithTheirOriginalSemantics() throws {
+    let decoder = ApertureJSON.makeDecoder()
+    let encoder = ApertureJSON.makeEncoder()
+
+    // Schema 2 persisted an unsigned `blueGain` that the renderer subtracted
+    // (`blueScale = 1 - 0.0042·a·s`). Schema 3 adds the gain, so the legacy
+    // key must decode negated, and a decode → encode → decode round trip must
+    // not flip it again.
+    let legacyCA = Data(
+      #"{"kind":"chromaticAberration","configuration":{"amount":0.5,"blueGain":0.0042,"redGain":0.0048}}"#
+        .utf8)
+    guard case .chromaticAberration(let ca) = try decoder.decode(FilmStage.self, from: legacyCA)
+    else { return XCTFail("Expected a chromatic aberration stage") }
+    XCTAssertEqual(ca.blueGain, -0.0042, accuracy: 1e-12)
+    XCTAssertEqual(ca.redGain, 0.0048, accuracy: 1e-12)
+    XCTAssertTrue(ca.seeded)
+
+    let reencoded = try encoder.encode(FilmStage.chromaticAberration(ca))
+    let json = try XCTUnwrap(
+      try JSONSerialization.jsonObject(with: reencoded) as? [String: Any])
+    let configuration = try XCTUnwrap(json["configuration"] as? [String: Any])
+    XCTAssertNil(configuration["blueGain"], "the unsigned legacy key must never be written again")
+    XCTAssertEqual(configuration["signedBlueGain"] as? Double ?? .nan, -0.0042, accuracy: 1e-12)
+    guard case .chromaticAberration(let roundTripped) = try decoder.decode(
+      FilmStage.self, from: reencoded)
+    else { return XCTFail("Expected a chromatic aberration stage") }
+    XCTAssertEqual(roundTripped, ca)
+
+    // A schema-3 payload carrying both keys prefers the signed one.
+    let mixed = Data(
+      #"{"kind":"chromaticAberration","configuration":{"amount":0.5,"blueGain":0.0042,"signedBlueGain":0.0032}}"#
+        .utf8)
+    guard case .chromaticAberration(let preferred) = try decoder.decode(FilmStage.self, from: mixed)
+    else { return XCTFail("Expected a chromatic aberration stage") }
+    XCTAssertEqual(preferred.blueGain, 0.0032, accuracy: 1e-12)
+
+    // Schema 2 persisted the halation tint as three loose warm gains; a
+    // non-default value must survive as `.warmByAmount`, not be replaced by
+    // the catalog default.
+    let legacyHalation = Data(
+      #"{"kind":"halation","configuration":{"amount":0.3,"warmRedGain":0.4,"warmBlueGain":0.05}}"#
+        .utf8)
+    guard case .halation(let halation) = try decoder.decode(FilmStage.self, from: legacyHalation)
+    else { return XCTFail("Expected a halation stage") }
+    XCTAssertEqual(halation.tint, .warmByAmount(red: 0.4, green: 0.04, blue: 0.05))
+    XCTAssertTrue(halation.radiusScalesWithAmount)
+
+    let explicitTint = Data(
+      #"{"kind":"halation","configuration":{"amount":0.3,"warmRedGain":0.4,"tint":{"fixed":{"red":1,"green":0.78,"blue":0.92}}}}"#
+        .utf8)
+    guard case .halation(let fixed) = try decoder.decode(FilmStage.self, from: explicitTint)
+    else { return XCTFail("Expected a halation stage") }
+    XCTAssertEqual(fixed.tint, .fixed(red: 1, green: 0.78, blue: 0.92))
+  }
+
   // MARK: 3. Partial-stage decode fills defaults; unknown kind throws
 
   func testStageDecodeFillsDefaultsForPartialConfigurationAndRejectsUnknownKind() throws {

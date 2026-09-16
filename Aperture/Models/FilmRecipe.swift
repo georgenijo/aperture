@@ -275,7 +275,11 @@ struct FilmResolvedSettings: Codable, Hashable, Sendable {
   /// Rendering consumes this persisted text, never the current locale or time zone.
   let dateStampText: String?
   let timeZoneIdentifier: String
-  /// Older item metadata omitted this field; those items decode as balanced.
+  /// Older item metadata omitted this field; those items decode with the
+  /// Balanced quality that was current when they were written. This literal
+  /// must never track `PhotoQualityPreference.balanced`, or raising the
+  /// preference would silently re-encode historical items differently.
+  static let legacyCompressionQuality = 0.88
   let compressionQuality: Double
 
   init(
@@ -310,7 +314,7 @@ struct FilmResolvedSettings: Codable, Hashable, Sendable {
       dateStampText: try values.decodeIfPresent(String.self, forKey: .dateStampText),
       timeZoneIdentifier: try values.decode(String.self, forKey: .timeZoneIdentifier),
       compressionQuality: try values.decodeIfPresent(Double.self, forKey: .compressionQuality)
-        ?? PhotoQualityPreference.balanced.compressionQuality
+        ?? FilmResolvedSettings.legacyCompressionQuality
     )
   }
 }

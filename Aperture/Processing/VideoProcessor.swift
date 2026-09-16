@@ -280,6 +280,7 @@ final class VideoProcessor: @unchecked Sendable {
     let halationAmount = recipe.halation?.amount ?? 0
     let vignetteAmount = recipe.vignette?.amount ?? 0
     let lightLeakStrength = recipe.lightLeak?.strength ?? 0
+    let lightLeakAlphaCap = recipe.lightLeak?.alphaCap ?? 0.68
     let grainAmount = recipe.grain?.amount ?? 0
     var output = image.cropped(to: extent)
     output = FilmColorCube.apply(output, cubeData: colorCube, extent: extent)
@@ -297,7 +298,9 @@ final class VideoProcessor: @unchecked Sendable {
       output = vignette.outputImage?.cropped(to: extent) ?? output
     }
     if let leak = decision.leak {
-      output = applyLeak(output, leak: leak, strength: lightLeakStrength, extent: extent)
+      output = applyLeak(
+        output, leak: leak, strength: lightLeakStrength, alphaCap: lightLeakAlphaCap,
+        extent: extent)
     }
     // CIRandomGenerator is evaluated by Core Image, not decoded into a
     // full-resolution CPU buffer. A deterministic subpixel translation per
@@ -361,8 +364,18 @@ final class VideoProcessor: @unchecked Sendable {
     }
   }
 
+  /// The leak's peak alpha at the frame edge: the persisted strength scaled
+  /// by the seeded intensity, never above the stage's `alphaCap`. Legacy
+  /// recipes never reach their cap (strength ≤ 0.48), so their frames are
+  /// unchanged; the 1998 recipe's 0.16 cap is what keeps its leaks subtle.
+  static func lightLeakBaseAlpha(strength: Double, intensity: Double, alphaCap: Double) -> Double
+  {
+    min(max(0, alphaCap), max(0, strength) * max(0, intensity))
+  }
+
   private func applyLeak(
-    _ image: CIImage, leak: LightLeakDecision, strength: Double, extent: CGRect
+    _ image: CIImage, leak: LightLeakDecision, strength: Double, alphaCap: Double,
+    extent: CGRect
   ) -> CIImage {
     guard let gradient = CIFilter(name: "CILinearGradient"),
       let composite = CIFilter(name: "CISourceOverCompositing")
@@ -370,7 +383,8 @@ final class VideoProcessor: @unchecked Sendable {
     let points = Self.lightLeakGradientPoints(
       edge: leak.edge, position: leak.position, width: leak.width, extent: extent)
     let width = CGFloat(min(max(leak.width, 0), 1))
-    let baseAlpha = CGFloat(min(0.85, strength * leak.intensity))
+    let baseAlpha = CGFloat(
+      Self.lightLeakBaseAlpha(strength: strength, intensity: leak.intensity, alphaCap: alphaCap))
     let color = CIColor(
       red: leak.color.red, green: leak.color.green, blue: leak.color.blue,
       alpha: baseAlpha * Self.lightLeakOpacity(distance: 0, width: width))

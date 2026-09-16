@@ -68,6 +68,26 @@ final class VideoProcessorTests: XCTestCase {
     XCTAssertNotEqual(first.grainPhase, later.grainPhase)
   }
 
+  func testLightLeakBaseAlphaHonoursTheStageAlphaCap() {
+    // The 1998 recipe: strength 0.30 × intensity 0.9 would be 0.27 without
+    // the cap; the persisted cap of 0.16 wins.
+    XCTAssertEqual(
+      VideoProcessor.lightLeakBaseAlpha(strength: 0.30, intensity: 0.9, alphaCap: 0.16), 0.16,
+      accuracy: 1e-9)
+    // Legacy recipes stay below their default cap, so their frames are unchanged.
+    XCTAssertEqual(
+      VideoProcessor.lightLeakBaseAlpha(strength: 0.48, intensity: 1.0, alphaCap: 0.68), 0.48,
+      accuracy: 1e-9)
+    XCTAssertEqual(
+      VideoProcessor.lightLeakBaseAlpha(strength: 0.2, intensity: 0.7, alphaCap: 0.68), 0.14,
+      accuracy: 1e-9)
+    XCTAssertEqual(VideoProcessor.lightLeakBaseAlpha(strength: -1, intensity: 1, alphaCap: 0.5), 0)
+    XCTAssertEqual(VideoProcessor.lightLeakBaseAlpha(strength: 1, intensity: 1, alphaCap: -0.5), 0)
+    XCTAssertEqual(
+      FilmRecipeCatalog.nineteenNinetyEight.stages.lightLeak?.alphaCap, 0.16,
+      "the video path reads the same persisted cap the still path enforces")
+  }
+
   func testLightLeakSelectedEdgeStartsAtEdgeAndFallsOffAtConfiguredWidth() {
     let extent = CGRect(x: 10, y: 20, width: 200, height: 100)
     let position = 0.35

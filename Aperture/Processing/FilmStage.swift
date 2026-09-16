@@ -135,8 +135,23 @@ struct HalationStage: Codable, Hashable, Sendable {
     case tint, radiusScalesWithAmount, blendOpacityScale, blendOpacityCap
   }
 
+  /// Stage-schema-2 manifests persisted the warm tint as three loose gains.
+  private enum LegacyCodingKeys: String, CodingKey {
+    case warmRedGain, warmGreenGain, warmBlueGain
+  }
+
   init(from decoder: Decoder) throws {
     let values = try decoder.container(keyedBy: CodingKeys.self)
+    let tint: Tint
+    if let persisted = try values.decodeIfPresent(Tint.self, forKey: .tint) {
+      tint = persisted
+    } else {
+      let legacyValues = try decoder.container(keyedBy: LegacyCodingKeys.self)
+      tint = .warmByAmount(
+        red: try legacyValues.decodeIfPresent(Double.self, forKey: .warmRedGain) ?? 0.20,
+        green: try legacyValues.decodeIfPresent(Double.self, forKey: .warmGreenGain) ?? 0.04,
+        blue: try legacyValues.decodeIfPresent(Double.self, forKey: .warmBlueGain) ?? 0.10)
+    }
     self.init(
       amount: try values.decode(Double.self, forKey: .amount),
       minimumAmount: try values.decodeIfPresent(Double.self, forKey: .minimumAmount) ?? 0.001,
@@ -144,8 +159,7 @@ struct HalationStage: Codable, Hashable, Sendable {
       intensityCap: try values.decodeIfPresent(Double.self, forKey: .intensityCap) ?? 1,
       radiusScale: try values.decodeIfPresent(Double.self, forKey: .radiusScale) ?? 0.012,
       minimumRadius: try values.decodeIfPresent(Double.self, forKey: .minimumRadius) ?? 1,
-      tint: try values.decodeIfPresent(Tint.self, forKey: .tint)
-        ?? .warmByAmount(red: 0.20, green: 0.04, blue: 0.10),
+      tint: tint,
       radiusScalesWithAmount: try values.decodeIfPresent(
         Bool.self, forKey: .radiusScalesWithAmount) ?? true,
       blendOpacityScale: try values.decodeIfPresent(Double.self, forKey: .blendOpacityScale) ?? 0.82,
@@ -251,17 +265,38 @@ struct ChromaticAberrationStage: Codable, Hashable, Sendable {
     self.seeded = seeded
   }
 
+  /// `blueGain` is persisted under `signedBlueGain`. Stage-schema-2
+  /// manifests wrote an unsigned `blueGain` that the renderer *subtracted*
+  /// (`1 - blueGain * amount * shift`); decoding negates that legacy key so
+  /// the persisted look is unchanged, and re-encoding only ever writes the
+  /// signed key, so a decode/encode round trip cannot flip the sign twice.
   private enum CodingKeys: String, CodingKey {
-    case amount, minimumAmount, redGain, blueGain, lateralShiftScale, seeded
+    case amount, minimumAmount, redGain, lateralShiftScale, seeded
+    case blueGain = "signedBlueGain"
+  }
+
+  private enum LegacyCodingKeys: String, CodingKey {
+    case unsignedBlueGain = "blueGain"
   }
 
   init(from decoder: Decoder) throws {
     let values = try decoder.container(keyedBy: CodingKeys.self)
+    let legacyValues = try decoder.container(keyedBy: LegacyCodingKeys.self)
+    let blueGain: Double
+    if let signed = try values.decodeIfPresent(Double.self, forKey: .blueGain) {
+      blueGain = signed
+    } else if let unsigned = try legacyValues.decodeIfPresent(
+      Double.self, forKey: .unsignedBlueGain)
+    {
+      blueGain = -unsigned
+    } else {
+      blueGain = -0.0042
+    }
     self.init(
       amount: try values.decode(Double.self, forKey: .amount),
       minimumAmount: try values.decodeIfPresent(Double.self, forKey: .minimumAmount) ?? 0.0005,
       redGain: try values.decodeIfPresent(Double.self, forKey: .redGain) ?? 0.0048,
-      blueGain: try values.decodeIfPresent(Double.self, forKey: .blueGain) ?? -0.0042,
+      blueGain: blueGain,
       lateralShiftScale: try values.decodeIfPresent(Double.self, forKey: .lateralShiftScale)
         ?? 0.00045,
       seeded: try values.decodeIfPresent(Bool.self, forKey: .seeded) ?? true
