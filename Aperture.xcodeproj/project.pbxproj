@@ -60,6 +60,7 @@
 		B10000010000000000000C1 /* FilmColorModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000020000000000000C1 /* FilmColorModelTests.swift */; };
 		DD1D779268ED43B4848974DE /* FilmStageTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 790E2BDA2D0B48F7BC5A6208 /* FilmStageTests.swift */; };
 		70E5561757EF788DE5C26512 /* FilmExportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9532324EE15FDA5175FDD94C /* FilmExportTests.swift */; };
+		647A4E3475D48CC0E99C29C7 /* DateStampOverlayTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 28138986AAB557ABFDCEFDBA /* DateStampOverlayTests.swift */; };
 		B10000010000000000000003 /* MediaLibraryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000020000000000000003 /* MediaLibraryTests.swift */; };
 		B10000010000000000000004 /* MediaModelsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000020000000000000004 /* MediaModelsTests.swift */; };
 		B10000010000000000000005 /* ReferenceFixtureTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000020000000000000005 /* ReferenceFixtureTests.swift */; };
@@ -138,6 +139,7 @@
 		B10000020000000000000C1 /* FilmColorModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FilmColorModelTests.swift; sourceTree = "<group>"; };
 		790E2BDA2D0B48F7BC5A6208 /* FilmStageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FilmStageTests.swift; sourceTree = "<group>"; };
 		9532324EE15FDA5175FDD94C /* FilmExportTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FilmExportTests.swift; sourceTree = "<group>"; };
+		28138986AAB557ABFDCEFDBA /* DateStampOverlayTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DateStampOverlayTests.swift; sourceTree = "<group>"; };
 		B10000020000000000000003 /* MediaLibraryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaLibraryTests.swift; sourceTree = "<group>"; };
 		B10000020000000000000004 /* MediaModelsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaModelsTests.swift; sourceTree = "<group>"; };
 		B10000020000000000000005 /* ReferenceFixtureTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReferenceFixtureTests.swift; sourceTree = "<group>"; };
@@ -271,6 +273,7 @@
 				B10000020000000000000C1 /* FilmColorModelTests.swift */,
 				790E2BDA2D0B48F7BC5A6208 /* FilmStageTests.swift */,
 				9532324EE15FDA5175FDD94C /* FilmExportTests.swift */,
+				28138986AAB557ABFDCEFDBA /* DateStampOverlayTests.swift */,
 				B10000020000000000000003 /* MediaLibraryTests.swift */,
 				B10000020000000000000004 /* MediaModelsTests.swift */,
 				B10000020000000000000005 /* ReferenceFixtureTests.swift */,
@@ -541,6 +544,7 @@
 				B10000010000000000000C1 /* FilmColorModelTests.swift in Sources */,
 				DD1D779268ED43B4848974DE /* FilmStageTests.swift in Sources */,
 				70E5561757EF788DE5C26512 /* FilmExportTests.swift in Sources */,
+				647A4E3475D48CC0E99C29C7 /* DateStampOverlayTests.swift in Sources */,
 				B10000010000000000000003 /* MediaLibraryTests.swift in Sources */,
 				B10000010000000000000004 /* MediaModelsTests.swift in Sources */,
 				B10000010000000000000005 /* ReferenceFixtureTests.swift in Sources */,

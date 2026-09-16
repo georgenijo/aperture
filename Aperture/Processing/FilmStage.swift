@@ -415,27 +415,75 @@ struct VignetteStage: Codable, Hashable, Sendable {
   }
 }
 
-/// The persisted date-stamp overlay. `style` only ever renders one look
-/// today; it exists so a future recipe can request a different treatment
-/// without changing the render call sites.
+/// The persisted date-stamp overlay. `style` selects a rendering treatment;
+/// the geometry/colour fields below are only consumed by `.sevenSegment` —
+/// `.monospaced` ignores them and keeps its own hard-coded look so existing
+/// renders stay byte-identical.
 struct DateStampStage: Codable, Hashable, Sendable {
   enum Style: String, Codable, Hashable, Sendable {
     case monospaced
+    case sevenSegment
   }
 
   var style: Style = .monospaced
+  var red: Double = 193.0 / 255
+  var green: Double = 81.0 / 255
+  var blue: Double = 17.0 / 255
+  var alpha: Double = 0.95
+  /// × font size.
+  var glowRadiusScale: Double = 0.25
+  var glowAlpha: Double = 0.5
+  /// × shortest canvas side.
+  var fontSizeScale: Double = 0.028
+  /// × shortest canvas side; distance from the left edge in portrait / the
+  /// right edge in landscape.
+  var edgeMarginScale: Double = 0.035
+  /// × shortest canvas side; distance from the bottom edge.
+  var endMarginScale: Double = 0.11
 
-  init(style: Style = .monospaced) {
+  init(
+    style: Style = .monospaced,
+    red: Double = 193.0 / 255,
+    green: Double = 81.0 / 255,
+    blue: Double = 17.0 / 255,
+    alpha: Double = 0.95,
+    glowRadiusScale: Double = 0.25,
+    glowAlpha: Double = 0.5,
+    fontSizeScale: Double = 0.028,
+    edgeMarginScale: Double = 0.035,
+    endMarginScale: Double = 0.11
+  ) {
     self.style = style
+    self.red = red
+    self.green = green
+    self.blue = blue
+    self.alpha = alpha
+    self.glowRadiusScale = glowRadiusScale
+    self.glowAlpha = glowAlpha
+    self.fontSizeScale = fontSizeScale
+    self.edgeMarginScale = edgeMarginScale
+    self.endMarginScale = endMarginScale
   }
 
   private enum CodingKeys: String, CodingKey {
-    case style
+    case style, red, green, blue, alpha, glowRadiusScale, glowAlpha, fontSizeScale,
+      edgeMarginScale, endMarginScale
   }
 
   init(from decoder: Decoder) throws {
     let values = try decoder.container(keyedBy: CodingKeys.self)
-    self.init(style: try values.decodeIfPresent(Style.self, forKey: .style) ?? .monospaced)
+    self.init(
+      style: try values.decodeIfPresent(Style.self, forKey: .style) ?? .monospaced,
+      red: try values.decodeIfPresent(Double.self, forKey: .red) ?? 193.0 / 255,
+      green: try values.decodeIfPresent(Double.self, forKey: .green) ?? 81.0 / 255,
+      blue: try values.decodeIfPresent(Double.self, forKey: .blue) ?? 17.0 / 255,
+      alpha: try values.decodeIfPresent(Double.self, forKey: .alpha) ?? 0.95,
+      glowRadiusScale: try values.decodeIfPresent(Double.self, forKey: .glowRadiusScale) ?? 0.25,
+      glowAlpha: try values.decodeIfPresent(Double.self, forKey: .glowAlpha) ?? 0.5,
+      fontSizeScale: try values.decodeIfPresent(Double.self, forKey: .fontSizeScale) ?? 0.028,
+      edgeMarginScale: try values.decodeIfPresent(Double.self, forKey: .edgeMarginScale) ?? 0.035,
+      endMarginScale: try values.decodeIfPresent(Double.self, forKey: .endMarginScale) ?? 0.11
+    )
   }
 }
 

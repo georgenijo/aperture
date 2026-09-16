@@ -327,7 +327,8 @@ final class VideoProcessor: @unchecked Sendable {
     }
     if recipe.resolvedSettings.dateStampConfiguration.mode != .off,
       let text = recipe.resolvedSettings.dateStampText,
-      let stamp = FilmOverlayFactory.dateStampImage(text: text, extent: extent),
+      let stamp = FilmOverlayFactory.dateStampImage(
+        text: text, extent: extent, stage: recipe.stages.dateStamp ?? DateStampStage()),
       let composite = CIFilter(name: "CISourceOverCompositing")
     {
       composite.setValue(stamp, forKey: kCIInputImageKey)
