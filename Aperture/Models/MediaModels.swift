@@ -12,7 +12,7 @@ struct MediaItem: Codable, Hashable, Identifiable, Sendable {
   var dimensions: PixelDimensions?
   var durationSeconds: Double?
   let capturedAt: Date
-  let recipe: AppliedFilmRecipe
+  var recipe: AppliedFilmRecipe
   let camera: CameraCaptureMetadata?
   var isFavorite: Bool
   var processing: MediaProcessingState

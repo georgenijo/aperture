@@ -1,5 +1,110 @@
 import SwiftUI
 
+/// A compact set of camera lens/zoom stops that sits over the live image.
+///
+/// `LensOption` deliberately carries both values used by the camera: the
+/// user-facing `displayZoomFactor` and AVFoundation's `rawZoomFactor`. The
+/// control renders the former and returns the complete option from its
+/// action, so callers never have to reconstruct (or guess) the raw value from
+/// a button's position or label.
+struct CameraZoomControl: View {
+  let options: [LensOption]
+  let selectedDisplayZoom: CGFloat
+  let onSelect: (LensOption) -> Void
+
+  init(
+    options: [LensOption],
+    selectedDisplayZoom: CGFloat,
+    onSelect: @escaping (LensOption) -> Void
+  ) {
+    self.options = options
+    self.selectedDisplayZoom = selectedDisplayZoom
+    self.onSelect = onSelect
+  }
+
+  var body: some View {
+    Group {
+      if options.isEmpty {
+        EmptyView()
+      } else {
+        HStack(spacing: 2) {
+          ForEach(options) { option in
+            optionButton(for: option)
+          }
+        }
+        .padding(4)
+        .background(.black.opacity(0.62), in: Capsule())
+        .overlay(Capsule().stroke(.white.opacity(0.14), lineWidth: 1))
+        .fixedSize(horizontal: true, vertical: true)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Camera zoom")
+        .accessibilityHint("Choose a lens or zoom level")
+      }
+    }
+  }
+
+  @ViewBuilder
+  private func optionButton(for option: LensOption) -> some View {
+    let isSelected = selectedOptionID == option.id
+
+    Button {
+      onSelect(option)
+    } label: {
+      Text(option.label)
+        .font(.caption.weight(.bold))
+        .monospacedDigit()
+        .foregroundStyle(isSelected ? ApertureStyle.ink : ApertureStyle.bone)
+        .frame(width: 44, height: 44)
+        .contentShape(Circle())
+        .background(
+          isSelected ? ApertureStyle.amber : .clear,
+          in: Circle()
+        )
+        .overlay(
+          Circle().stroke(
+            isSelected ? ApertureStyle.amber.opacity(0.95) : .clear, lineWidth: 1)
+        )
+    }
+    .buttonStyle(CameraZoomOptionButtonStyle())
+    .accessibilityLabel("Zoom \(option.label)")
+    .accessibilityValue(isSelected ? "Selected" : "Available")
+    .accessibilityHint("Set the camera to \(option.label)")
+    .accessibilityAddTraits(isSelected ? .isSelected : [])
+  }
+
+  /// A ramped/pinch zoom can sit between presets. In that case no preset is
+  /// marked selected rather than implying that the camera is at a stop it has
+  /// not actually reached. The tolerance is only for floating-point noise
+  /// from the capture device and is intentionally smaller than the mapper's
+  /// option de-duplication threshold.
+  private var selectedOptionID: String? {
+    guard selectedDisplayZoom.isFinite else { return nil }
+
+    let nearest = options
+      .filter { $0.displayZoomFactor.isFinite }
+      .min {
+        abs($0.displayZoomFactor - selectedDisplayZoom)
+          < abs($1.displayZoomFactor - selectedDisplayZoom)
+      }
+    guard let nearest else { return nil }
+
+    let tolerance = max(0.01, abs(nearest.displayZoomFactor) * 0.005)
+    return abs(nearest.displayZoomFactor - selectedDisplayZoom) <= tolerance
+      ? nearest.id
+      : nil
+  }
+}
+
+private struct CameraZoomOptionButtonStyle: ButtonStyle {
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+  func makeBody(configuration: Configuration) -> some View {
+    configuration.label
+      .scaleEffect(reduceMotion ? 1 : (configuration.isPressed ? 0.95 : 1))
+      .animation(reduceMotion ? nil : .easeOut(duration: 0.12), value: configuration.isPressed)
+  }
+}
+
 struct FocusIndicator: View {
   var body: some View {
     RoundedRectangle(cornerRadius: 8).stroke(.black.opacity(0.88), lineWidth: 6)

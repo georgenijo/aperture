@@ -18,7 +18,13 @@ struct ZoomableImageView: View {
         .frame(width: proxy.size.width, height: proxy.size.height)
         .contentShape(Rectangle())
         .gesture(magnificationGesture)
-        .simultaneousGesture(dragGesture(in: proxy.size))
+        // A dormant DragGesture still wins against the surrounding paged
+        // TabView. Only install the pan recognizer while the photo is zoomed;
+        // at fit-to-screen, horizontal drags belong to gallery paging.
+        .simultaneousGesture(
+          dragGesture(in: proxy.size),
+          including: scale > 1 ? .all : .none
+        )
         .onTapGesture(count: 2) {
           withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.82)) {
             if scale > 1 {

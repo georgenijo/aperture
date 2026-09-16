@@ -47,7 +47,7 @@ enum FilmOverlayFactory {
     context.setAllowsAntialiasing(true)
     context.setShouldAntialias(true)
     let fontSize = layout.fontPointSize * scale
-    let font = CTFontCreateWithName("SFMono-Regular" as CFString, fontSize, nil)
+    let font = CTFontCreateWithName("SFMono-Semibold" as CFString, fontSize, nil)
     let attributes: [NSAttributedString.Key: Any] = [
       NSAttributedString.Key(kCTFontAttributeName as String): font,
       NSAttributedString.Key(kCTForegroundColorAttributeName as String): CGColor(
@@ -63,6 +63,11 @@ enum FilmOverlayFactory {
     )
     context.textPosition = CGPoint(
       x: frame.minX, y: frame.minY + max(0, (frame.height - fontSize) * 0.35))
+    context.setShadow(
+      offset: CGSize(width: fontSize * 0.07, height: -fontSize * 0.07),
+      blur: fontSize * 0.08,
+      color: CGColor(gray: 0.02, alpha: 0.82)
+    )
     CTLineDraw(line, context)
     guard let cgImage = context.makeImage() else { return nil }
     return CIImage(cgImage: cgImage)

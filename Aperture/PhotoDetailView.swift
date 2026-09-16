@@ -23,8 +23,14 @@ struct PhotoDetailView: View {
     ZStack {
       ApertureStyle.ink.ignoresSafeArea()
       if model.items.isEmpty {
-        Text("This media is no longer in the Lab.")
-          .foregroundStyle(ApertureStyle.muted)
+        VStack(spacing: 12) {
+          Image(systemName: "photo.badge.exclamationmark")
+            .font(.system(size: 34, weight: .light))
+            .foregroundStyle(ApertureStyle.amber)
+          Text("This media is no longer in the Lab.")
+            .font(.subheadline)
+            .foregroundStyle(ApertureStyle.muted)
+        }
       } else {
         TabView(selection: $currentID) {
           ForEach(model.items) { item in
@@ -39,8 +45,15 @@ struct PhotoDetailView: View {
     .toolbarColorScheme(.dark, for: .navigationBar)
     .toolbar {
       ToolbarItem(placement: .principal) {
-        Text(currentTitle)
-          .font(.caption.weight(.semibold)).foregroundStyle(ApertureStyle.muted)
+        VStack(spacing: 1) {
+          Text(currentTitle)
+            .font(.caption.weight(.semibold)).foregroundStyle(ApertureStyle.bone)
+          if model.items.count > 1 {
+            Text("\(currentIndex + 1) of \(model.items.count)")
+              .font(.system(size: 9, weight: .medium, design: .rounded))
+              .foregroundStyle(ApertureStyle.quiet)
+          }
+        }
       }
       ToolbarItemGroup(placement: .navigationBarTrailing) {
         if let item = currentItem {
@@ -50,6 +63,7 @@ struct PhotoDetailView: View {
             Image(systemName: item.isFavorite ? "star.fill" : "star")
           }
           .foregroundStyle(item.isFavorite ? ApertureStyle.amber : ApertureStyle.bone)
+          .buttonStyle(ApertureToolbarButtonStyle())
           .accessibilityLabel(
             item.isFavorite
               ? "Remove favorite from this \(mediaNoun(for: item))"
@@ -66,6 +80,8 @@ struct PhotoDetailView: View {
             Image(systemName: "square.and.arrow.up")
           }
           .disabled(isSharing || item.processing.phase != .ready)
+          .foregroundStyle(ApertureStyle.bone)
+          .buttonStyle(ApertureToolbarButtonStyle())
           .accessibilityIdentifier("detail-share")
           .accessibilityLabel("Share \(mediaNoun(for: item))")
           .accessibilityHint(
@@ -81,6 +97,8 @@ struct PhotoDetailView: View {
             Image(systemName: "photo.badge.arrow.down")
           }
           .disabled(isExporting || item.processing.phase != .ready)
+          .foregroundStyle(ApertureStyle.bone)
+          .buttonStyle(ApertureToolbarButtonStyle())
           .accessibilityIdentifier("detail-export")
           .accessibilityLabel("Save \(mediaNoun(for: item)) to Photos")
           .accessibilityHint(
@@ -92,7 +110,8 @@ struct PhotoDetailView: View {
           } label: {
             Image(systemName: "trash")
           }
-          .foregroundStyle(.red)
+          .foregroundStyle(ApertureStyle.danger)
+          .buttonStyle(ApertureToolbarButtonStyle())
           .accessibilityIdentifier("detail-delete")
           .accessibilityLabel("Delete \(mediaNoun(for: item))")
           .accessibilityHint("Delete this \(mediaNoun(for: item)) from the Lab")
@@ -156,6 +175,10 @@ struct PhotoDetailView: View {
     return "\(mediaNoun(for: item).capitalized) · \(recipe)"
   }
 
+  private var currentIndex: Int {
+    model.items.firstIndex(where: { $0.id == currentID }) ?? 0
+  }
+
   private func mediaNoun(for item: MediaItem) -> String {
     item.mediaType == .video ? "video" : "photo"
   }
@@ -196,6 +219,13 @@ private struct DetailPage: View {
     }
     .overlay(alignment: .bottom) {
       VStack(spacing: 5) {
+        HStack(spacing: 6) {
+          Circle().fill(ApertureStyle.amber).frame(width: 5, height: 5)
+          Text(item.mediaType == .video ? "DEVELOPED FILM" : "DEVELOPED FRAME")
+        }
+        .font(.system(size: 9, weight: .bold, design: .rounded))
+        .tracking(1.2)
+        .foregroundStyle(ApertureStyle.amber)
         Text(
           item.recipe.identifier.rawValue.replacingOccurrences(of: "aperture.", with: "")
             .uppercased()
@@ -204,10 +234,19 @@ private struct DetailPage: View {
         Text(item.capturedAt.formatted(date: .abbreviated, time: .shortened))
           .font(.caption2)
       }
-      .foregroundStyle(ApertureStyle.bone.opacity(0.72))
-      .padding(.bottom, 20)
+      .foregroundStyle(ApertureStyle.bone.opacity(0.82))
+      .padding(.horizontal, 18)
+      .padding(.vertical, 11)
+      .background(.black.opacity(0.42), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+      .overlay(
+        RoundedRectangle(cornerRadius: 14, style: .continuous)
+          .stroke(.white.opacity(0.1), lineWidth: 1)
+      )
+      .padding(.horizontal, 18)
+      .padding(.bottom, 18)
     }
     .accessibilityElement(children: .contain)
+    .accessibilityIdentifier("detail-item-\(item.id.uuidString)")
     .accessibilityLabel("\(mediaNoun.capitalized) detail")
     .accessibilityValue(detailAccessibilityValue)
   }

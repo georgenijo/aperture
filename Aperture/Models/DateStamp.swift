@@ -7,6 +7,8 @@ enum DateStampMode: String, Codable, CaseIterable, Hashable, Sendable {
 }
 
 enum DateStampFormat: String, Codable, CaseIterable, Hashable, Sendable {
+  case digitalDateTime
+  case huji
   case localeAware
   case yearMonthDay
   case monthDayYear
@@ -78,6 +80,10 @@ enum ApertureDateStampFormatter {
     formatter.timeZone = timeZone
 
     switch configuration.format {
+    case .digitalDateTime:
+      formatter.dateFormat = "yyyy/MM/dd  HH:mm"
+    case .huji:
+      formatter.dateFormat = "M d ''yy"
     case .localeAware:
       formatter.dateStyle = .short
       formatter.timeStyle = .none

@@ -67,6 +67,7 @@ struct FilmProcessingDecision: Hashable, Sendable {
 
   static func make(for recipe: AppliedFilmRecipe) -> FilmProcessingDecision {
     var random = SeededRandomNumberGenerator(seed: recipe.seed ^ 0xA5A5_5A5A_3141_5926)
+    let isHujiStyle = recipe.identifier == .nineteenNinetyEight
     let leak: LightLeakDecision?
     if recipe.resolvedSettings.lightLeakApplied,
       recipe.parameters.lightLeakProbability > 0,
@@ -75,7 +76,7 @@ struct FilmProcessingDecision: Hashable, Sendable {
       leak = LightLeakDecision(
         edge: LightLeakDecision.Edge(rawValue: random.next() % 4) ?? .left,
         position: random.value(in: 0.16...0.84),
-        width: random.value(in: 0.16...0.42),
+        width: random.value(in: isHujiStyle ? 0.10...0.27 : 0.16...0.42),
         angle: random.value(in: -0.42...0.42),
         color: LightLeakDecision.palette[
           Int(random.next() % UInt64(LightLeakDecision.palette.count))],
@@ -111,10 +112,10 @@ struct LightLeakDecision: Hashable, Sendable {
   let intensity: Double
 
   static let palette: [LightLeakColor] = [
-    LightLeakColor(red: 1.0, green: 0.28, blue: 0.08),
-    LightLeakColor(red: 1.0, green: 0.54, blue: 0.10),
-    LightLeakColor(red: 0.98, green: 0.18, blue: 0.12),
-    LightLeakColor(red: 1.0, green: 0.76, blue: 0.26),
+    LightLeakColor(red: 1.0, green: 0.20, blue: 0.06),
+    LightLeakColor(red: 1.0, green: 0.38, blue: 0.07),
+    LightLeakColor(red: 0.96, green: 0.08, blue: 0.16),
+    LightLeakColor(red: 1.0, green: 0.55, blue: 0.12),
   ]
 }
 

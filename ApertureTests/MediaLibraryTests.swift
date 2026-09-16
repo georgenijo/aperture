@@ -3,6 +3,36 @@ import XCTest
 @testable import Aperture
 
 final class MediaLibraryTests: XCTestCase {
+  func testUpdatingRecipePersistsWithoutChangingAssets() async throws {
+    let root = try temporaryDirectory(named: "recipe-update")
+    let library = MediaLibrary(rootURL: root)
+    let payload = Data("camera-capture".utf8)
+    let item = try await library.createAndCommit(
+      TestMediaFactory.makeWriteRequest(),
+      processed: MediaAssetPayload(data: payload, fileExtension: "jpg"),
+      original: MediaAssetPayload(data: payload, fileExtension: "jpg")
+    )
+    let newRecipe = FilmRecipeCatalog.nineteenNinetyEight.resolve(
+      seed: item.recipe.seed,
+      capturedAt: item.capturedAt,
+      options: FilmProcessingOptions(
+        lightLeaksEnabled: false,
+        dateStamp: .off
+      ),
+      timeZone: TimeZone(secondsFromGMT: 0)!
+    )
+
+    let updated = try await library.updateRecipe(newRecipe, for: item.id)
+    XCTAssertEqual(updated.recipe, newRecipe)
+    XCTAssertEqual(updated.files, item.files)
+
+    let relaunched = MediaLibrary(rootURL: root)
+    let relaunchedItems = try await relaunched.items()
+    let persisted = try XCTUnwrap(relaunchedItems.first)
+    XCTAssertEqual(persisted.recipe, newRecipe)
+    XCTAssertEqual(persisted.files, item.files)
+  }
+
   func testCreationCommitAndDeletionRemoveAuthoritativeAssets() async throws {
     let root = try temporaryDirectory(named: "library")
     let library = MediaLibrary(rootURL: root)
@@ -179,6 +209,24 @@ final class MediaLibraryTests: XCTestCase {
     XCTAssertTrue(snapshot.diagnostics.contains { $0.code == .recoveredStagedItem })
     let urlValue = try await relaunchedLibrary.assetURL(for: staged.item, kind: .processed)
     let url = try XCTUnwrap(urlValue)
+    XCTAssertEqual(try Data(contentsOf: url), Data("photo".utf8))
+  }
+
+  func testCompleteStagingIsRecoveredDuringLiveRefresh() async throws {
+    let root = try temporaryDirectory(named: "library")
+    let library = MediaLibrary(rootURL: root)
+    _ = try await library.prepare()
+    let staged = try await library.stage(
+      TestMediaFactory.makeWriteRequest(),
+      processed: MediaAssetPayload(data: Data("photo".utf8), fileExtension: "jpg")
+    )
+
+    let snapshot = try await library.refreshSnapshot()
+
+    XCTAssertEqual(snapshot.items.map(\.id), [staged.item.id])
+    XCTAssertTrue(snapshot.diagnostics.contains { $0.code == .recoveredStagedItem })
+    let recoveredURL = try await library.assetURL(for: staged.item, kind: .processed)
+    let url = try XCTUnwrap(recoveredURL)
     XCTAssertEqual(try Data(contentsOf: url), Data("photo".utf8))
   }
 

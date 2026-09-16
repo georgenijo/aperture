@@ -153,7 +153,9 @@ final class AppModel: ObservableObject {
       // one item at a time and yields through async processing so the
       // camera/Lab can render immediately after the index is opened.
       Task { @MainActor [weak self] in
-        await self?.recoverInterruptedItems(candidates)
+        guard let self else { return }
+        await self.recoverInterruptedItems(candidates)
+        await self.migrateLegacyPhotoTimestamps()
       }
     } catch {
       errorMessage = error.localizedDescription
@@ -163,7 +165,7 @@ final class AppModel: ObservableObject {
 
   func refresh() async {
     do {
-      let snapshot = try await mediaLibrary.prepare()
+      let snapshot = try await mediaLibrary.refreshSnapshot()
       diagnostics = snapshot.diagnostics
       items = uiTestEmptyLibrary ? [] : snapshot.items
     } catch {
@@ -345,49 +347,61 @@ final class AppModel: ObservableObject {
 
   #if DEBUG
     private static let uiTestSeedID = UUID(uuidString: "A7B4A9E8-3F04-4B3A-9DD4-6EAFB4F4A198")!
+    private static let uiTestSecondSeedID = UUID(
+      uuidString: "B8C5BAF9-4015-4C4B-AEE5-7FBC5C05B209")!
 
     private func seedUITestLibraryIfNeeded() async throws {
-      guard !(try await mediaLibrary.items()).contains(where: { $0.id == Self.uiTestSeedID }) else {
-        return
-      }
+      let existingIDs = Set(try await mediaLibrary.items().map(\.id))
       let size = CGSize(width: 320, height: 240)
-      let renderer = UIGraphicsImageRenderer(size: size)
-      let image = renderer.image { context in
-        UIColor(red: 0.82, green: 0.29, blue: 0.16, alpha: 1).setFill()
-        context.fill(CGRect(origin: .zero, size: size))
-        UIColor(red: 0.98, green: 0.74, blue: 0.28, alpha: 1).setFill()
-        context.fill(CGRect(x: 48, y: 38, width: 224, height: 164))
-      }
-      guard
-        let data = image.jpegData(
-          compressionQuality: CGFloat(PhotoQualityPreference.maximum.compressionQuality))
-      else {
-        throw MediaLibraryError.invalidMedia("The UI-test seed image could not be encoded.")
-      }
-      let capturedAt = Date(timeIntervalSince1970: 1_700_000_000)
-      let recipe = FilmRecipeCatalog.nineteenNinetyEight.resolve(
-        seed: 0xA9E2_7E12,
-        capturedAt: capturedAt,
-        options: FilmProcessingOptions(
-          lightLeaksEnabled: false,
-          dateStamp: .off,
-          photoQuality: .maximum
+      let seeds: [(id: UUID, capturedAt: Date, color: UIColor, seed: UInt64)] = [
+        (
+          Self.uiTestSeedID, Date(timeIntervalSince1970: 1_700_000_000),
+          UIColor(red: 0.82, green: 0.29, blue: 0.16, alpha: 1), 0xA9E2_7E12
         ),
-        timeZone: .gmt
-      )
-      let request = MediaWriteRequest(
-        id: Self.uiTestSeedID,
-        mediaType: .photo,
-        dimensions: PixelDimensions(width: Int(size.width), height: Int(size.height)),
-        capturedAt: capturedAt,
-        recipe: recipe,
-        processing: .ready,
-        provenance: .captured
-      )
-      _ = try await mediaLibrary.createAndCommit(
-        request,
-        processed: MediaAssetPayload(data: data, fileExtension: "jpg")
-      )
+        (
+          Self.uiTestSecondSeedID, Date(timeIntervalSince1970: 1_699_999_000),
+          UIColor(red: 0.18, green: 0.42, blue: 0.72, alpha: 1), 0xB8F3_9D21
+        ),
+      ]
+
+      for seedItem in seeds where !existingIDs.contains(seedItem.id) {
+        let renderer = UIGraphicsImageRenderer(size: size)
+        let image = renderer.image { context in
+          seedItem.color.setFill()
+          context.fill(CGRect(origin: .zero, size: size))
+          UIColor(red: 0.98, green: 0.74, blue: 0.28, alpha: 1).setFill()
+          context.fill(CGRect(x: 48, y: 38, width: 224, height: 164))
+        }
+        guard
+          let data = image.jpegData(
+            compressionQuality: CGFloat(PhotoQualityPreference.maximum.compressionQuality))
+        else {
+          throw MediaLibraryError.invalidMedia("The UI-test seed image could not be encoded.")
+        }
+        let recipe = FilmRecipeCatalog.nineteenNinetyEight.resolve(
+          seed: seedItem.seed,
+          capturedAt: seedItem.capturedAt,
+          options: FilmProcessingOptions(
+            lightLeaksEnabled: false,
+            dateStamp: .off,
+            photoQuality: .maximum
+          ),
+          timeZone: .gmt
+        )
+        let request = MediaWriteRequest(
+          id: seedItem.id,
+          mediaType: .photo,
+          dimensions: PixelDimensions(width: Int(size.width), height: Int(size.height)),
+          capturedAt: seedItem.capturedAt,
+          recipe: recipe,
+          processing: .ready,
+          provenance: .captured
+        )
+        _ = try await mediaLibrary.createAndCommit(
+          request,
+          processed: MediaAssetPayload(data: data, fileExtension: "jpg")
+        )
+      }
     }
   #endif
 }

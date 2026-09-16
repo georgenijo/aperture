@@ -155,6 +155,11 @@ struct FilmRecipe: Codable, Hashable, Identifiable, Sendable {
     options: FilmProcessingOptions,
     timeZone: TimeZone = .autoupdatingCurrent
   ) -> AppliedFilmRecipe {
+    let stampConfiguration =
+      id == .nineteenNinetyEight
+      ? DateStampConfiguration(
+        mode: .current, format: .digitalDateTime, localeIdentifier: "en_US_POSIX")
+      : options.dateStamp
     var random = SeededRandomNumberGenerator(seed: seed)
     let exposureShift = random.value(in: -0.045...0.045)
     let warmthShift = random.value(in: -0.025...0.025)
@@ -193,10 +198,10 @@ struct FilmRecipe: Codable, Hashable, Identifiable, Sendable {
       parameters: resolved,
       resolvedSettings: FilmResolvedSettings(
         lightLeakApplied: leakEnabled,
-        dateStampConfiguration: options.dateStamp,
+        dateStampConfiguration: stampConfiguration,
         dateStampText: ApertureDateStampFormatter.string(
           for: capturedAt,
-          configuration: options.dateStamp,
+          configuration: stampConfiguration,
           timeZone: timeZone
         ),
         timeZoneIdentifier: timeZone.identifier,
@@ -286,17 +291,18 @@ enum FilmRecipeCatalog {
     id: .nineteenNinetyEight,
     version: 1,
     displayName: "1998",
-    // Tuned against Huji Cam on a shared desk scene (2026-09-15): lavender
-    // highlights, orange midtones, crushed blacks, no vignette.
+    // Huji's signature is a dense disposable-camera curve with vivid source
+    // colours, cool shade, warm skin/wood, and imperfect optics. Avoid broad
+    // split tints here: they turn neutral walls and white highlights pink.
     baseParameters: FilmParameters(
-      exposure: 0.05, contrast: 1.02, saturation: 1.4, warmth: 0.5,
-      highlightRolloff: 0.35, shadowCoolness: 0,
-      grainAmount: 0.34, grainSize: 0.62, halation: 0.72,
-      vignette: 0.015, softness: 0.38, chromaticAberration: 0.22,
-      lightLeakProbability: 0.52, lightLeakStrength: 0.84,
-      channelSplit: 0.1, blackCrush: 0.3,
-      shadowTint: FilmColorTint(red: 0.1, green: 0.05, blue: 0.05),
-      highlightTint: FilmColorTint(red: -0.06, green: 0.03, blue: 0.26)
+      exposure: 0.015, contrast: 1.22, saturation: 1.42, warmth: 0.10,
+      highlightRolloff: 0.16, shadowCoolness: 0.42,
+      grainAmount: 0.24, grainSize: 0.56, halation: 0.16,
+      vignette: 0.075, softness: 0.72, chromaticAberration: 0.78,
+      lightLeakProbability: 0.46, lightLeakStrength: 0.48,
+      channelSplit: 0.07, blackCrush: 0.43,
+      shadowTint: FilmColorTint(red: -0.018, green: 0.012, blue: 0.045),
+      highlightTint: FilmColorTint(red: 0.014, green: 0.006, blue: -0.012)
     )
   )
 

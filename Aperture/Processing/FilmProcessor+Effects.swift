@@ -56,13 +56,35 @@ extension FilmProcessor {
   }
 
   func applySoftness(_ image: CIImage, amount: Double, extent: CGRect) -> CIImage {
-    guard amount > 0.001,
-      let blur = CIFilter(name: "CIGaussianBlur")
-    else { return image }
-    blur.setValue(image, forKey: kCIInputImageKey)
-    blur.setValue(max(0.15, extent.width * 0.0022 * CGFloat(amount)), forKey: kCIInputRadiusKey)
-    guard let blurred = blur.outputImage?.cropped(to: extent) else { return image }
-    return blend(blurred, over: image, opacity: min(0.46, CGFloat(amount) * 0.72), extent: extent)
+    guard amount > 0.001 else { return image }
+
+    // Cheap plastic lenses stay reasonably sharp in the centre but smear
+    // detail radially near the frame edges. A global Gaussian blur looked
+    // merely out of focus and erased the disposable-camera character.
+    let shortestSide = min(extent.width, extent.height)
+    let centre = CIVector(x: extent.midX, y: extent.midY)
+    guard let zoomBlur = CIFilter(name: "CIZoomBlur") else { return image }
+    zoomBlur.setValue(image.clampedToExtent(), forKey: kCIInputImageKey)
+    zoomBlur.setValue(centre, forKey: kCIInputCenterKey)
+    zoomBlur.setValue(shortestSide * 0.0026 * CGFloat(amount), forKey: kCIInputAmountKey)
+    guard let softened = zoomBlur.outputImage?.cropped(to: extent) else { return image }
+
+    guard let radial = CIFilter(name: "CIRadialGradient"),
+      let masked = CIFilter(name: "CIBlendWithMask")
+    else {
+      return blend(
+        softened, over: image, opacity: min(0.42, CGFloat(amount) * 0.55), extent: extent)
+    }
+    radial.setValue(centre, forKey: kCIInputCenterKey)
+    radial.setValue(shortestSide * 0.38, forKey: "inputRadius0")
+    radial.setValue(shortestSide * 0.78, forKey: "inputRadius1")
+    radial.setValue(CIColor.black, forKey: "inputColor0")
+    radial.setValue(CIColor.white, forKey: "inputColor1")
+    guard let edgeMask = radial.outputImage?.cropped(to: extent) else { return image }
+    masked.setValue(softened, forKey: kCIInputImageKey)
+    masked.setValue(image, forKey: kCIInputBackgroundImageKey)
+    masked.setValue(edgeMask, forKey: kCIInputMaskImageKey)
+    return masked.outputImage?.cropped(to: extent) ?? image
   }
 
   func applyChromaticAberration(
@@ -72,18 +94,19 @@ extension FilmProcessor {
     extent: CGRect
   ) -> CIImage {
     guard amount > 0.0005 else { return image }
-    let shift = max(0.15, min(extent.width, extent.height) * 0.0022 * CGFloat(amount))
-    let red = shift * CGFloat(decision.redChannelShift)
-    let blue = shift * CGFloat(decision.blueChannelShift)
-    // Native channel filters avoid source-compiled CIColorKernel use while
-    // retaining restrained, deterministic chromatic separation.
+    let direction: CGFloat = decision.seed & 1 == 0 ? 1 : -1
+    let redScale = 1 + 0.0048 * CGFloat(amount) * CGFloat(decision.redChannelShift)
+    let blueScale = 1 - 0.0042 * CGFloat(amount) * CGFloat(decision.blueChannelShift)
+    let lateralShift = min(extent.width, extent.height) * 0.00045 * CGFloat(amount) * direction
+    // Scale the red and blue records around the optical centre. Separation
+    // increases toward the edges, unlike the old uniform horizontal shift.
     guard
-      let redChannel = Self.shiftedChannel(
-        image, channel: .red, translationX: -red, extent: extent),
-      let greenChannel = Self.shiftedChannel(
-        image, channel: .green, translationX: 0, extent: extent),
-      let blueChannel = Self.shiftedChannel(
-        image, channel: .blue, translationX: blue, extent: extent),
+      let redChannel = Self.transformedChannel(
+        image, channel: .red, scale: redScale, translationX: -lateralShift, extent: extent),
+      let greenChannel = Self.transformedChannel(
+        image, channel: .green, scale: 1, translationX: 0, extent: extent),
+      let blueChannel = Self.transformedChannel(
+        image, channel: .blue, scale: blueScale, translationX: lateralShift, extent: extent),
       let redGreen = Self.mergeChannels(redChannel, with: greenChannel, extent: extent),
       let output = Self.mergeChannels(blueChannel, with: redGreen, extent: extent)
     else {
@@ -199,19 +222,23 @@ extension FilmProcessor {
     case blue
   }
 
-  private static func shiftedChannel(
+  private static func transformedChannel(
     _ image: CIImage,
     channel: Channel,
+    scale: CGFloat,
     translationX: CGFloat,
     extent: CGRect
   ) -> CIImage? {
-    guard let transform = CIFilter(name: "CIAffineTransform"),
-      let matrix = CIFilter(name: "CIColorMatrix")
-    else { return nil }
-    transform.setValue(image, forKey: kCIInputImageKey)
-    transform.setValue(
-      CGAffineTransform(translationX: translationX, y: 0), forKey: kCIInputTransformKey)
-    guard let shifted = transform.outputImage else { return nil }
+    guard let matrix = CIFilter(name: "CIColorMatrix") else { return nil }
+    let transform = CGAffineTransform(
+      a: scale,
+      b: 0,
+      c: 0,
+      d: scale,
+      tx: extent.midX * (1 - scale) + translationX,
+      ty: extent.midY * (1 - scale)
+    )
+    let shifted = image.clampedToExtent().transformed(by: transform).cropped(to: extent)
     matrix.setValue(shifted, forKey: kCIInputImageKey)
     matrix.setValue(CIVector(x: channel == .red ? 1 : 0, y: 0, z: 0, w: 0), forKey: "inputRVector")
     matrix.setValue(

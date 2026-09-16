@@ -22,7 +22,7 @@ final class ApertureUITests: XCTestCase {
     XCTAssertTrue(app.buttons["camera-settings"].exists)
 
     app.buttons["camera-lab"].tap()
-    XCTAssertTrue(app.navigationBars["The Lab"].waitForExistence(timeout: 5))
+    XCTAssertTrue(app.navigationBars["Gallery"].waitForExistence(timeout: 5))
     XCTAssertTrue(app.buttons["Close Lab"].exists)
     app.buttons["Close Lab"].tap()
 
@@ -64,7 +64,7 @@ final class ApertureUITests: XCTestCase {
 
     XCTAssertTrue(app.buttons["camera-lab"].waitForExistence(timeout: 10))
     app.buttons["camera-lab"].tap()
-    XCTAssertTrue(app.navigationBars["The Lab"].waitForExistence(timeout: 10))
+    XCTAssertTrue(app.navigationBars["Gallery"].waitForExistence(timeout: 10))
 
     let item = app.buttons["lab-item-\(seedID)"]
     XCTAssertTrue(item.waitForExistence(timeout: 10))
@@ -85,5 +85,24 @@ final class ApertureUITests: XCTestCase {
     app.buttons["lab-delete"].tap()
     XCTAssertTrue(app.buttons["lab-delete-confirm"].waitForExistence(timeout: 5))
     XCTAssertTrue(app.staticTexts["Delete this media?"].exists)
+  }
+
+  func testPhotoDetailSwipesBetweenGalleryItems() {
+    let app = launch(seededLibrary: true)
+    let firstID = "A7B4A9E8-3F04-4B3A-9DD4-6EAFB4F4A198"
+    let secondID = "B8C5BAF9-4015-4C4B-AEE5-7FBC5C05B209"
+
+    XCTAssertTrue(app.buttons["camera-lab"].waitForExistence(timeout: 10))
+    app.buttons["camera-lab"].tap()
+    let firstTile = app.buttons["lab-item-\(firstID)"]
+    XCTAssertTrue(firstTile.waitForExistence(timeout: 10))
+    firstTile.tap()
+
+    let firstPage = app.descendants(matching: .any)["detail-item-\(firstID)"]
+    XCTAssertTrue(firstPage.waitForExistence(timeout: 10))
+    firstPage.swipeLeft()
+    XCTAssertTrue(
+      app.descendants(matching: .any)["detail-item-\(secondID)"].waitForExistence(timeout: 5)
+    )
   }
 }

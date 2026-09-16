@@ -79,16 +79,20 @@ enum FilmColorModel {
     green = clampUnit(luminance + (green - luminance) * grade.saturation)
     blue = clampUnit(luminance + (blue - luminance) * grade.saturation)
 
-    // Legacy global warmth and cool shadows, matching the matrix the
-    // Night and Cinema recipes were tuned against.
+    // Global warmth stays deliberately restrained. Shadow coolness is
+    // applied below only to the shadow band; applying blue gain globally
+    // makes white walls lavender instead of leaving them photographic.
     red = clampUnit(red * (1 + grade.warmth * 0.08))
-    blue = clampUnit(blue * (1 - grade.warmth * 0.07 + grade.shadowCoolness * 0.04))
+    blue = clampUnit(blue * (1 - grade.warmth * 0.07))
 
     // Split toning by tonal band. Deep blacks are excluded from the shadow
     // band so a crushed bottle stays black instead of turning orange.
     let tone = 0.2126 * red + 0.7152 * green + 0.0722 * blue
     let highlightWeight = smoothstep(0.42, 0.88, tone)
     let shadowWeight = smoothstep(0.05, 0.30, tone) * (1 - highlightWeight)
+    red -= grade.shadowCoolness * 0.035 * shadowWeight
+    green += grade.shadowCoolness * 0.014 * shadowWeight
+    blue += grade.shadowCoolness * 0.075 * shadowWeight
     red += grade.shadowTint.red * shadowWeight + grade.highlightTint.red * highlightWeight
     green += grade.shadowTint.green * shadowWeight + grade.highlightTint.green * highlightWeight
     blue += grade.shadowTint.blue * shadowWeight + grade.highlightTint.blue * highlightWeight

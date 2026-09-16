@@ -2,20 +2,20 @@ import XCTest
 
 @testable import Aperture
 
-/// Targets come from the same desk scene shot with Aperture and with Huji Cam
-/// (2026-09-15): area averages of the wall, the wooden desk, and a black bottle.
 final class FilmColorModelTests: XCTestCase {
   private let huji = FilmRecipeCatalog.nineteenNinetyEight.baseParameters.colorGrade
 
-  func testHujiGradeTintsHighlightsLavenderAndMidtonesOrange() {
+  func testHujiGradePreservesSceneHuesWhileSeparatingWarmAndCoolColors() {
     let wall = FilmColorModel.map(rgb(171, 173, 163), grade: huji)
-    assertClose(wall, rgb(185, 188, 209), tolerance: 0.06, "wall")
-
     let wood = FilmColorModel.map(rgb(113, 74, 41), grade: huji)
-    assertClose(wood, rgb(175, 93, 40), tolerance: 0.07, "desk wood")
-
     let bottle = FilmColorModel.map(rgb(17, 14, 8), grade: huji)
-    assertClose(bottle, rgb(6, 5, 4), tolerance: 0.04, "bottle")
+
+    // Near-neutral highlights stay near-neutral instead of being painted
+    // lavender, warm browns gain separation, and blacks retain a hard toe.
+    XCTAssertLessThan(abs(wall.blue - wall.red), 0.08)
+    XCTAssertGreaterThan(wood.red - wood.blue, 0.24)
+    XCTAssertLessThan(bottle.luminance, 0.025)
+    XCTAssertGreaterThan(wall.luminance, bottle.luminance + 0.45)
   }
 
   func testNeutralGradeIsIdentity() {

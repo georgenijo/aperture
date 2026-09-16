@@ -99,52 +99,20 @@ struct ContentView: View {
 
   private var cameraSurface: some View {
     GeometryReader { proxy in
+      let isLandscape = proxy.size.width > proxy.size.height
+
       ZStack {
-        CameraPreview(
-          session: model.cameraManager.session,
-          device: model.cameraManager.activeDevice,
-          initialZoomFactor: model.cameraManager.currentRawZoom,
-          onFocus: { event in
-            if model.focus(at: event.devicePoint) {
-              showFocus(at: event.viewPoint)
-              UIAccessibility.post(notification: .announcement, argument: "Focus set")
-            }
-          },
-          onPinchZoom: { rawZoom in model.zoom(to: rawZoom) },
-          onCaptureRotation: model.cameraManager.setCaptureRotationAngle(_:)
-        )
-        .ignoresSafeArea()
-        LinearGradient(
-          colors: [.black.opacity(0.72), .clear, .black.opacity(0.88)],
-          startPoint: .top,
-          endPoint: .bottom
-        )
-        .ignoresSafeArea()
-        .allowsHitTesting(false)
-        VStack(spacing: 0) {
-          topBar
-          Spacer()
-          lensRail
-          bottomBar
-        }
-        .padding(.top, proxy.safeAreaInsets.top)
-        .padding(.bottom, max(proxy.safeAreaInsets.bottom, 12))
+        ApertureStyle.ink.ignoresSafeArea()
+        persistentCameraLayout(proxy: proxy, isLandscape: isLandscape)
         if let issue = model.cameraIssue {
           CameraIssueBanner(
             issue: issue,
             retry: { model.retryCameraIssue() },
             dismiss: { model.dismissCameraIssue() }
           )
-          .padding(.top, proxy.safeAreaInsets.top + 62)
-          .padding(.horizontal, 16)
+          .padding(.top, proxy.safeAreaInsets.top + (isLandscape ? 8 : 62))
+          .padding(.horizontal, isLandscape ? 16 : 16)
           .transition(reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity))
-        }
-        if let focusPoint {
-          FocusIndicator()
-            .position(x: focusPoint.x * proxy.size.width, y: focusPoint.y * proxy.size.height)
-            .id(focusToken)
-            .transition(reduceMotion ? .opacity : .scale.combined(with: .opacity))
-            .allowsHitTesting(false)
         }
         if showFlash {
           Color.white.ignoresSafeArea().opacity(0.9).allowsHitTesting(false)
@@ -153,86 +121,237 @@ struct ContentView: View {
     }
   }
 
-  private var topBar: some View {
-    HStack(spacing: 12) {
-      if model.captureMode == .photo {
-        Button {
-          showFlashMenu.toggle()
-        } label: {
-          Label(displayFlashMode.label, systemImage: displayFlashMode.systemImage)
-            .font(.caption.weight(.semibold))
-            .foregroundStyle(ApertureStyle.bone)
-            .padding(.horizontal, 11)
-            .frame(minHeight: 44)
-            .background(ApertureStyle.panel.opacity(0.82), in: Capsule())
+  private var previewAspectRatio: CGFloat {
+    // Photos use the camera's native 4:3 sensor framing. The video session is
+    // configured with AVCaptureSession.Preset.high, which is normally 16:9.
+    model.captureMode == .photo ? 4.0 / 3.0 : 16.0 / 9.0
+  }
+
+  /// Keeps a single CameraPreview in the hierarchy while the phone rotates.
+  /// Only its frame and the surrounding chrome change, so AVFoundation does
+  /// not lose its live preview layer during a portrait/landscape transition.
+  private func persistentCameraLayout(proxy: GeometryProxy, isLandscape: Bool) -> some View {
+    let safeTop = proxy.safeAreaInsets.top
+    let safeBottom = max(proxy.safeAreaInsets.bottom, 12)
+    let safeLeading = proxy.safeAreaInsets.leading
+    let safeTrailing = proxy.safeAreaInsets.trailing
+    let dockWidth = isLandscape ? min(max(220, proxy.size.width * 0.28), 300) : 0
+    let portraitTopReserve: CGFloat = 68
+    let portraitBottomReserve: CGFloat = 170
+    let availableWidth = isLandscape
+      ? max(1, proxy.size.width - dockWidth - safeLeading - safeTrailing)
+      : max(1, proxy.size.width - safeLeading - safeTrailing)
+    let availableHeight = isLandscape
+      ? max(1, proxy.size.height - safeTop - safeBottom)
+      : max(
+        1,
+        proxy.size.height - safeTop - safeBottom - portraitTopReserve - portraitBottomReserve)
+    let orientedPreviewAspectRatio = isLandscape ? previewAspectRatio : 1 / previewAspectRatio
+    let previewWidth = min(availableWidth, availableHeight * orientedPreviewAspectRatio)
+    let previewHeight = previewWidth / orientedPreviewAspectRatio
+    let previewCenterX = isLandscape
+      ? safeLeading + (availableWidth / 2)
+      : safeLeading + (availableWidth / 2)
+    let previewCenterY = isLandscape
+      ? safeTop + (availableHeight / 2)
+      : safeTop + portraitTopReserve + (previewHeight / 2)
+
+    return ZStack(alignment: .topLeading) {
+      viewfinder
+        .frame(width: previewWidth, height: previewHeight)
+        .overlay(alignment: .bottom) {
+          lensRail
+            .padding(.bottom, 12)
         }
-        .accessibilityLabel("Flash")
-        .accessibilityValue(displayFlashMode.label)
-        .accessibilityHint("Choose flash mode")
-        .confirmationDialog("Flash", isPresented: $showFlashMenu, titleVisibility: .visible) {
-          ForEach(flashOptions, id: \.self) { mode in
-            Button(mode.label) { model.setFlash(mode) }
-          }
-        }
-      }
-      Spacer()
-      Button {
-        showFilmPicker = true
-      } label: {
-        HStack(spacing: 5) {
-          Circle().fill(ApertureStyle.amber).frame(width: 7, height: 7)
-          Text(selectedFilmName).font(.caption.weight(.bold))
-        }
-        .foregroundStyle(ApertureStyle.bone)
-        .padding(.horizontal, 12)
-        .frame(minHeight: 44)
-        .background(ApertureStyle.panel.opacity(0.82), in: Capsule())
-      }
-      .accessibilityLabel("Film")
-      .accessibilityValue(selectedFilmName)
-      .accessibilityHint("Choose a film recipe")
-      Button {
-        model.switchCamera()
-      } label: {
-        Image(systemName: "camera.rotate")
-      }
-      .buttonStyle(ApertureIconButtonStyle())
-      .accessibilityLabel("Switch camera")
-      .accessibilityHint("Switch between the back and front cameras")
-      Button {
-        showSettings = true
-      } label: {
-        Image(systemName: "gearshape")
-      }
-      .buttonStyle(ApertureIconButtonStyle())
-      .accessibilityIdentifier("camera-settings")
-      .accessibilityLabel("Settings")
-      .accessibilityHint("Open camera and processing settings")
+        .position(x: previewCenterX, y: previewCenterY)
+
+      cameraChrome(
+        proxy: proxy,
+        isLandscape: isLandscape,
+        dockWidth: dockWidth,
+        safeTop: safeTop,
+        safeBottom: safeBottom,
+        safeTrailing: safeTrailing
+      )
     }
-    .padding(.horizontal, 18)
-    .padding(.top, 8)
+  }
+
+  @ViewBuilder
+  private func cameraChrome(
+    proxy: GeometryProxy,
+    isLandscape: Bool,
+    dockWidth: CGFloat,
+    safeTop: CGFloat,
+    safeBottom: CGFloat,
+    safeTrailing: CGFloat
+  ) -> some View {
+    if isLandscape {
+      VStack(spacing: 8) {
+        topBar(landscape: true)
+        Spacer(minLength: 4)
+        bottomBar
+      }
+      .padding(.top, safeTop)
+      .padding(.bottom, safeBottom)
+      .frame(width: dockWidth, height: proxy.size.height)
+      .position(
+        x: proxy.size.width - safeTrailing - (dockWidth / 2),
+        y: proxy.size.height / 2
+      )
+    } else {
+      VStack(spacing: 0) {
+        topBar(landscape: false)
+        Spacer(minLength: 0)
+        bottomBar
+      }
+      .padding(.top, safeTop)
+      .padding(.bottom, safeBottom)
+      .frame(width: proxy.size.width, height: proxy.size.height)
+      .position(x: proxy.size.width / 2, y: proxy.size.height / 2)
+    }
+  }
+
+  private var viewfinder: some View {
+    GeometryReader { proxy in
+      ZStack {
+        ApertureStyle.ink
+        CameraPreview(
+          session: model.cameraManager.session, device: model.cameraManager.activeDevice,
+          initialZoomFactor: model.cameraManager.currentRawZoom,
+          onFocus: { event in
+            if model.focus(at: event.devicePoint) {
+              showFocus(at: event.viewPoint)
+              UIAccessibility.post(notification: .announcement, argument: "Focus set")
+            }
+          },
+          onPinchZoom: { rawZoom in model.zoom(to: rawZoom) },
+          onCaptureRotation: model.cameraManager.setCaptureRotationAngle(_:))
+        LinearGradient(
+          colors: [.black.opacity(0.58), .clear, .black.opacity(0.78)],
+          startPoint: .top,
+          endPoint: .bottom
+        )
+        .allowsHitTesting(false)
+        if let focusPoint {
+          FocusIndicator()
+            .position(x: focusPoint.x * proxy.size.width, y: focusPoint.y * proxy.size.height)
+            .id(focusToken)
+            .transition(reduceMotion ? .opacity : .scale.combined(with: .opacity))
+            .allowsHitTesting(false)
+        }
+      }
+      .clipped()
+      .overlay(Rectangle().stroke(.white.opacity(0.1), lineWidth: 1))
+    }
+    .accessibilityElement(children: .contain)
+    .accessibilityLabel("Camera viewfinder")
+    .accessibilityHint("Double tap to focus at the center")
+  }
+
+  @ViewBuilder
+  private func topBar(landscape: Bool) -> some View {
+    if landscape {
+      VStack(spacing: 8) {
+        HStack(spacing: 8) {
+          flashButton
+          Spacer(minLength: 0)
+          filmButton
+        }
+        HStack(spacing: 8) {
+          Spacer(minLength: 0)
+          switchCameraButton
+          settingsButton
+        }
+      }
+      .padding(.horizontal, 8)
+      .padding(.top, 8)
+    } else {
+      HStack(spacing: 12) {
+        flashButton
+        Spacer(minLength: 0)
+        filmButton
+        switchCameraButton
+        settingsButton
+      }
+      .padding(.horizontal, 18)
+      .padding(.top, 8)
+    }
+  }
+
+  @ViewBuilder
+  private var flashButton: some View {
+    if model.captureMode == .photo {
+      Button {
+        showFlashMenu.toggle()
+      } label: {
+        Label(displayFlashMode.label, systemImage: displayFlashMode.systemImage)
+          .font(.caption.weight(.semibold))
+          .foregroundStyle(ApertureStyle.bone)
+          .padding(.horizontal, 11)
+          .frame(minHeight: 44)
+          .background(ApertureStyle.panel.opacity(0.82), in: Capsule())
+      }
+      .lineLimit(1)
+      .accessibilityLabel("Flash")
+      .accessibilityValue(displayFlashMode.label)
+      .accessibilityHint("Choose flash mode")
+      .confirmationDialog("Flash", isPresented: $showFlashMenu, titleVisibility: .visible) {
+        ForEach(flashOptions, id: \.self) { mode in
+          Button(mode.label) { model.setFlash(mode) }
+        }
+      }
+    }
+  }
+
+  private var filmButton: some View {
+    Button {
+      showFilmPicker = true
+    } label: {
+      HStack(spacing: 5) {
+        Circle().fill(ApertureStyle.amber).frame(width: 7, height: 7)
+        Text(selectedFilmName).font(.caption.weight(.bold)).lineLimit(1)
+      }
+      .foregroundStyle(ApertureStyle.bone)
+      .padding(.horizontal, 12)
+      .frame(minHeight: 44)
+      .background(ApertureStyle.panel.opacity(0.82), in: Capsule())
+    }
+    .layoutPriority(1)
+    .accessibilityLabel("Film")
+    .accessibilityValue(selectedFilmName)
+    .accessibilityHint("Choose a film recipe")
+  }
+
+  private var switchCameraButton: some View {
+    Button {
+      model.switchCamera()
+    } label: {
+      Image(systemName: "camera.rotate")
+    }
+    .buttonStyle(ApertureIconButtonStyle())
+    .accessibilityLabel("Switch camera")
+    .accessibilityHint("Switch between the back and front cameras")
+  }
+
+  private var settingsButton: some View {
+    Button {
+      showSettings = true
+    } label: {
+      Image(systemName: "gearshape")
+    }
+    .buttonStyle(ApertureIconButtonStyle())
+    .accessibilityIdentifier("camera-settings")
+    .accessibilityLabel("Settings")
+    .accessibilityHint("Open camera and processing settings")
   }
 
   private var lensRail: some View {
-    HStack(spacing: 8) {
-      ForEach(model.cameraManager.capabilities.lensOptions) { option in
-        Button(option.label) { model.zoom(to: option.rawZoomFactor) }
-          .font(.caption.weight(.bold))
-          .foregroundStyle(isSelected(option) ? ApertureStyle.ink : ApertureStyle.bone)
-          .frame(minWidth: 44, minHeight: 44)
-          .background(
-            isSelected(option) ? ApertureStyle.amber : ApertureStyle.panel.opacity(0.82),
-            in: Capsule()
-          )
-          .accessibilityLabel("Lens \(option.label)")
-          .accessibilityValue(isSelected(option) ? "Selected" : "Not selected")
-          .accessibilityAddTraits(isSelected(option) ? .isSelected : [])
-      }
+    CameraZoomControl(
+      options: model.cameraManager.capabilities.lensOptions,
+      selectedDisplayZoom: model.cameraManager.currentDisplayZoom
+    ) { option in
+      model.zoom(to: option.rawZoomFactor)
     }
-    .padding(.horizontal, 10)
-    .frame(maxWidth: .infinity)
-    .padding(.vertical, 8)
-    .background(.black.opacity(0.28), in: Capsule())
   }
 
   private var bottomBar: some View {
@@ -258,7 +377,15 @@ struct ContentView: View {
                 .background(
                   ApertureStyle.panel, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             }
-            if !model.items.isEmpty {
+            if !model.processingIDs.isEmpty {
+              ProgressView()
+                .controlSize(.small)
+                .tint(ApertureStyle.ink)
+                .frame(width: 24, height: 24)
+                .background(ApertureStyle.amber, in: Circle())
+                .offset(x: 6, y: -6)
+                .accessibilityHidden(true)
+            } else if !model.items.isEmpty {
               Text("\(model.items.count)")
                 .font(.caption2.weight(.bold))
                 .foregroundStyle(ApertureStyle.ink)
@@ -405,10 +532,6 @@ struct ContentView: View {
     }
     return model.cameraIssue?.message
       ?? "Aperture can’t start the viewfinder right now. Your local Lab is still available."
-  }
-
-  private func isSelected(_ option: LensOption) -> Bool {
-    abs(option.displayZoomFactor - model.cameraManager.currentDisplayZoom) < 0.08
   }
 
   private func showFocus(at point: CGPoint) {

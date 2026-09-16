@@ -17,6 +17,8 @@ struct MediaThumbnailView: View {
         Image(uiImage: image)
           .resizable()
           .scaledToFill()
+          .frame(maxWidth: .infinity, maxHeight: .infinity)
+          .clipped()
       } else if failed {
         Image(systemName: item.processing.phase == .failed ? "exclamationmark.triangle" : "photo")
           .font(.title3)
@@ -41,6 +43,7 @@ struct MediaThumbnailView: View {
         }
       }
     }
+    .frame(maxWidth: .infinity, maxHeight: .infinity)
     .clipped()
     .task(
       id: item.id.uuidString + "-" + item.files.processed + "-" + item.processing.phase.rawValue

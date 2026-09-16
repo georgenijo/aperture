@@ -138,12 +138,14 @@ final class FilmProcessorTests: XCTestCase {
       options: options,
       timeZone: TimeZone(secondsFromGMT: 0)!
     )
-    XCTAssertEqual(recipe.resolvedSettings.dateStampText, "1998 01 01")
+    XCTAssertEqual(recipe.resolvedSettings.dateStampText, "1999/01/01  00:00")
 
     let small = try XCTUnwrap(
-      FilmDateStampLayout.make(text: "1998 01 01", canvasSize: CGSize(width: 1000, height: 800)))
+      FilmDateStampLayout.make(
+        text: "1999/01/01  00:00", canvasSize: CGSize(width: 1000, height: 800)))
     let large = try XCTUnwrap(
-      FilmDateStampLayout.make(text: "1998 01 01", canvasSize: CGSize(width: 2000, height: 1600)))
+      FilmDateStampLayout.make(
+        text: "1999/01/01  00:00", canvasSize: CGSize(width: 2000, height: 1600)))
     XCTAssertEqual(large.frame.minX, small.frame.minX * 2, accuracy: 0.01)
     XCTAssertEqual(large.frame.minY, small.frame.minY * 2, accuracy: 0.01)
     XCTAssertEqual(large.frame.width, small.frame.width * 2, accuracy: 0.01)
@@ -188,8 +190,8 @@ final class FilmProcessorTests: XCTestCase {
     XCTAssertEqual(centre.red, expected.red, accuracy: 3 / 255, "red")
     XCTAssertEqual(centre.green, expected.green, accuracy: 3 / 255, "green")
     XCTAssertEqual(centre.blue, expected.blue, accuracy: 3 / 255, "blue")
-    // Sanity: the Huji grade must actually have moved the wall towards lavender.
-    XCTAssertGreaterThan(centre.blue, centre.red + 0.03)
+    // Sanity: the Huji grade should not paint a neutral wall lavender.
+    XCTAssertLessThan(abs(centre.blue - centre.red), 0.08)
   }
 
   func testRenderedOutputIsExactlyRepeatableForSameSeed() async throws {

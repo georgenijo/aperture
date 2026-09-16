@@ -78,9 +78,28 @@ extension AppModel {
         await self.refresh()
         await self.developVideo(item: item, autoSaveToPhotos: context.autoSaveToPhotos)
       } catch {
+        var reportedError: Error = error
+        // If the transaction was interrupted after all source files became
+        // durable, refresh publishes that staged capture. Continue developing
+        // it instead of leaving the user with an invisible photograph.
+        await self.refresh()
+        if let recovered = self.items.first(where: { $0.id == itemID }),
+          recovered.processing.phase == .pending
+        {
+          do {
+            try await self.mediaLibrary.updateProcessing(
+              recovered.processing.nextAttempt, for: recovered.id)
+            await self.refresh()
+            await self.developVideo(
+              item: recovered, autoSaveToPhotos: context.autoSaveToPhotos)
+            return
+          } catch {
+            reportedError = error
+          }
+        }
         self.processingIDs.remove(itemID)
-        await self.markProcessingFailed(itemID, error: error)
-        self.errorMessage = error.localizedDescription
+        await self.markProcessingFailed(itemID, error: reportedError)
+        self.errorMessage = reportedError.localizedDescription
         await self.refresh()
       }
     }
@@ -130,9 +149,24 @@ extension AppModel {
         await self.refresh()
         try await self.develop(item: item, sourceData: captured.data)
       } catch {
+        var reportedError: Error = error
+        await self.refresh()
+        if let recovered = self.items.first(where: { $0.id == itemID }),
+          recovered.processing.phase == .pending
+        {
+          do {
+            try await self.mediaLibrary.updateProcessing(
+              recovered.processing.nextAttempt, for: recovered.id)
+            await self.refresh()
+            try await self.develop(item: recovered, sourceData: captured.data)
+            return
+          } catch {
+            reportedError = error
+          }
+        }
         self.processingIDs.remove(itemID)
-        await self.markProcessingFailed(itemID, error: error)
-        self.errorMessage = error.localizedDescription
+        await self.markProcessingFailed(itemID, error: reportedError)
+        self.errorMessage = reportedError.localizedDescription
         await self.refresh()
       }
     }
@@ -175,7 +209,94 @@ extension AppModel {
     }
   }
 
-  private func develop(item: MediaItem, sourceData: Data) async throws {
+  /// Re-renders older 1998 captures from their untouched originals so the
+  /// baked-in stamp reflects the real capture date and time. The migration is
+  /// deliberately local-only: it never creates duplicate entries in Photos.
+  func migrateLegacyPhotoTimestamps() async {
+    var migratedCount = 0
+    let digitalConfiguration = DateStampConfiguration(
+      mode: .current,
+      format: .digitalDateTime,
+      localeIdentifier: "en_US_POSIX"
+    )
+
+    for item in items where item.mediaType == .photo
+      && item.recipe.identifier == .nineteenNinetyEight
+      && item.processing.phase == .ready
+      && (item.recipe.resolvedSettings.dateStampConfiguration != digitalConfiguration
+        || item.recipe.resolvedSettings.dateStampText?.contains(":") != true)
+    {
+      guard !Task.isCancelled else { return }
+      guard let originalURL = try? await mediaLibrary.assetURL(for: item, kind: .original),
+        FileManager.default.fileExists(atPath: originalURL.path)
+      else {
+        // Never develop a filtered JPEG a second time. Captures without a
+        // preserved original keep their existing rendition.
+        continue
+      }
+
+      let previousRecipe = item.recipe
+      let previousProcessing = item.processing
+      do {
+        let timeZone =
+          TimeZone(identifier: previousRecipe.resolvedSettings.timeZoneIdentifier)
+          ?? .autoupdatingCurrent
+        let stampText = ApertureDateStampFormatter.string(
+          for: item.capturedAt,
+          configuration: digitalConfiguration,
+          timeZone: timeZone
+        )
+        let migratedRecipe = AppliedFilmRecipe(
+          identifier: previousRecipe.identifier,
+          version: previousRecipe.version,
+          seed: previousRecipe.seed,
+          parameters: previousRecipe.parameters,
+          resolvedSettings: FilmResolvedSettings(
+            lightLeakApplied: previousRecipe.resolvedSettings.lightLeakApplied,
+            dateStampConfiguration: digitalConfiguration,
+            dateStampText: stampText,
+            timeZoneIdentifier: timeZone.identifier,
+            compressionQuality: previousRecipe.resolvedSettings.compressionQuality
+          )
+        )
+        let sourceData = try await Task.detached(priority: .utility) {
+          try Data(contentsOf: originalURL)
+        }.value
+        let migratedItem = try await mediaLibrary.updateRecipe(migratedRecipe, for: item.id)
+        try await mediaLibrary.updateProcessing(migratedItem.processing.nextAttempt, for: item.id)
+        processingIDs.insert(item.id)
+        await refresh()
+        try await develop(
+          item: migratedItem,
+          sourceData: sourceData,
+          autoSaveToPhotos: false,
+          showCompletionNotice: false
+        )
+        migratedCount += 1
+      } catch {
+        // The previous developed file is still intact until replacement
+        // succeeds, so restore its metadata and keep it usable on any error.
+        _ = try? await mediaLibrary.updateRecipe(previousRecipe, for: item.id)
+        try? await mediaLibrary.updateProcessing(previousProcessing, for: item.id)
+        processingIDs.remove(item.id)
+        errorMessage = error.localizedDescription
+        await refresh()
+      }
+    }
+
+    if migratedCount > 0 {
+      notice = migratedCount == 1
+        ? "Updated the photo timestamp."
+        : "Updated (migratedCount) photo timestamps."
+    }
+  }
+
+  private func develop(
+    item: MediaItem,
+    sourceData: Data,
+    autoSaveToPhotos: Bool? = nil,
+    showCompletionNotice: Bool = true
+  ) async throws {
     let encoded = try await Task.detached(priority: .userInitiated) {
       let image = try FilmProcessor.shared.process(sourceData, recipe: item.recipe)
       // The applied recipe is the source of truth for repeatable output.
@@ -196,7 +317,7 @@ extension AppModel {
     processingIDs.remove(item.id)
     await refresh()
 
-    if settings.autoSaveToPhotos,
+    if autoSaveToPhotos ?? settings.autoSaveToPhotos,
       let url = try await mediaLibrary.assetURL(for: updatedItem, kind: .processed)
     {
       do {
@@ -208,7 +329,7 @@ extension AppModel {
         // The local item is already safe; auto-save is intentionally add-only.
         notice = "Developed locally. Photos could not be updated."
       }
-    } else {
+    } else if showCompletionNotice {
       notice = "Developed."
     }
   }

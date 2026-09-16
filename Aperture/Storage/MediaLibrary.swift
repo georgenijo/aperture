@@ -73,6 +73,20 @@ actor MediaLibrary {
     return snapshot()
   }
 
+  /// Reconciles durable transactions while the app remains running. This is
+  /// intentionally separate from `prepare()`: `commit(_:)` calls `prepare()`
+  /// between staging and publication, and must retain ownership of the staged
+  /// directory until that commit finishes.
+  func refreshSnapshot() throws -> MediaLibrarySnapshot {
+    _ = try prepare()
+    var changed = false
+    changed = try recoverInterruptedDeletions() || changed
+    changed = try reconcileCommittedItems() || changed
+    changed = try recoverStagedCreations() || changed
+    if changed { try writeManifest(manifest) }
+    return snapshot()
+  }
+
   func items() throws -> [MediaItem] {
     _ = try prepare()
     return sortedItems(manifest.items)
@@ -302,6 +316,18 @@ actor MediaLibrary {
     var item = manifest.items[index]
     item.processing = processing
     try update(item, at: index)
+  }
+
+  @discardableResult
+  func updateRecipe(_ recipe: AppliedFilmRecipe, for id: UUID) throws -> MediaItem {
+    _ = try prepare()
+    guard let index = manifest.items.firstIndex(where: { $0.id == id }) else {
+      throw MediaLibraryError.itemNotFound(id)
+    }
+    var item = manifest.items[index]
+    item.recipe = recipe
+    try update(item, at: index)
+    return item
   }
 
   func assetURL(for relativePath: String) throws -> URL {

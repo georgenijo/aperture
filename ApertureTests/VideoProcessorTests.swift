@@ -154,7 +154,6 @@ final class VideoProcessorTests: XCTestCase {
     XCTAssertEqual(centre.red, expected.red, accuracy: 8 / 255, "red")
     XCTAssertEqual(centre.green, expected.green, accuracy: 8 / 255, "green")
     XCTAssertEqual(centre.blue, expected.blue, accuracy: 8 / 255, "blue")
-    XCTAssertGreaterThan(centre.blue, centre.red + 0.03)
   }
 
   func testMissingSourceAndUnsupportedRecipeVersionFailBeforeExport() async throws {

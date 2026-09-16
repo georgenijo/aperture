@@ -58,7 +58,7 @@ final class MediaModelsTests: XCTestCase {
     let decoded = try ApertureJSON.makeDecoder().decode(MediaItem.self, from: data)
 
     XCTAssertEqual(decoded, item)
-    XCTAssertEqual(decoded.recipe.resolvedSettings.dateStampText, "09 15 98")
+    XCTAssertEqual(decoded.recipe.resolvedSettings.dateStampText, "2026/09/15  13:15")
     XCTAssertEqual(decoded.recipe.resolvedSettings.timeZoneIdentifier, "America/New_York")
   }
 
@@ -134,6 +134,18 @@ final class MediaModelsTests: XCTestCase {
         timeZone: .gmt
       ),
       "2026 09 15"
+    )
+    XCTAssertEqual(
+      ApertureDateStampFormatter.string(
+        for: date,
+        configuration: DateStampConfiguration(
+          mode: .current,
+          format: .digitalDateTime,
+          localeIdentifier: "en_US_POSIX"
+        ),
+        timeZone: .gmt
+      ),
+      "2026/09/15  12:00"
     )
     XCTAssertEqual(
       ApertureDateStampFormatter.string(
