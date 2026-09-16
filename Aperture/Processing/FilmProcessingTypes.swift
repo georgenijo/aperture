@@ -124,10 +124,25 @@ struct FilmDateStampLayout: Hashable, Sendable {
   let text: String
   let frame: CGRect
   let fontPointSize: CGFloat
+  /// Radians. The frame above is defined in the *unrotated* local space;
+  /// renderers apply this rotation about `frame.origin` so the raster is
+  /// drawn already rotated. `0` for every layout except portrait
+  /// `.sevenSegment`, which reads bottom-to-top along the left edge.
+  let rotation: CGFloat
 
   /// The layout is defined as a fraction of the final pixel canvas, so a
-  /// preview and a full-resolution render use the same geometry.
+  /// preview and a full-resolution render use the same geometry. Defaults to
+  /// `.monospaced` so existing call sites keep working unchanged.
   static func make(text: String, canvasSize: CGSize) -> FilmDateStampLayout? {
+    make(text: text, canvasSize: canvasSize, style: DateStampStage())
+  }
+
+  /// `style` carries both the rendering style and the geometry knobs
+  /// `.sevenSegment` needs (font/margin scales); `.monospaced` ignores them
+  /// and keeps its original hard-coded geometry byte-identical.
+  static func make(text: String, canvasSize: CGSize, style: DateStampStage)
+    -> FilmDateStampLayout?
+  {
     guard !text.isEmpty,
       canvasSize.width.isFinite,
       canvasSize.height.isFinite,
@@ -135,21 +150,84 @@ struct FilmDateStampLayout: Hashable, Sendable {
       canvasSize.height > 0
     else { return nil }
 
-    let shortestSide = min(canvasSize.width, canvasSize.height)
-    let fontSize = max(10, shortestSide * 0.025)
-    let width = min(
-      canvasSize.width * 0.42, max(fontSize * CGFloat(text.count) * 0.61, fontSize * 2))
-    let height = fontSize * 1.35
-    let margin = shortestSide * 0.035
-    return FilmDateStampLayout(
-      text: text,
-      frame: CGRect(
-        x: canvasSize.width - width - margin,
-        y: margin,
-        width: width,
-        height: height
-      ),
-      fontPointSize: fontSize
-    )
+    switch style.style {
+    case .monospaced:
+      let shortestSide = min(canvasSize.width, canvasSize.height)
+      let fontSize = max(10, shortestSide * 0.025)
+      let width = min(
+        canvasSize.width * 0.42, max(fontSize * CGFloat(text.count) * 0.61, fontSize * 2))
+      let height = fontSize * 1.35
+      let margin = shortestSide * 0.035
+      return FilmDateStampLayout(
+        text: text,
+        frame: CGRect(
+          x: canvasSize.width - width - margin,
+          y: margin,
+          width: width,
+          height: height
+        ),
+        fontPointSize: fontSize,
+        rotation: 0
+      )
+
+    case .sevenSegment:
+      let shortestSide = min(canvasSize.width, canvasSize.height)
+      let fontSize = max(10, shortestSide * CGFloat(style.fontSizeScale))
+      let textWidth = Self.sevenSegmentTextWidth(text, fontSize: fontSize)
+      let edgeMargin = shortestSide * CGFloat(style.edgeMarginScale)
+      let endMargin = shortestSide * CGFloat(style.endMarginScale)
+      let isPortrait = canvasSize.height > canvasSize.width
+
+      if isPortrait {
+        // Bottom-left origin coordinate space (Core Graphics/Core Image
+        // convention: y increases upward). The frame below is the
+        // *unrotated* text box: it starts at (edgeMargin, endMargin) with
+        // width = textWidth (the advance direction) and height = fontSize
+        // (the glyph cell). Rotating it by +90° about its own origin
+        // (edgeMargin, endMargin) sweeps the advance direction from +x to
+        // +y — i.e. the text climbs upward from that pivot — while the
+        // glyph-cell height sweeps from +y to -x, landing on the near
+        // (ascender) side at `edgeMargin - fontSize`, closer to the true
+        // left edge than the pivot itself. Because `fontSizeScale <
+        // edgeMarginScale` by default, that near side stays a positive
+        // distance from x = 0, leaving a uniform gap between the image edge
+        // and the glyphs regardless of font size.
+        return FilmDateStampLayout(
+          text: text,
+          frame: CGRect(x: edgeMargin, y: endMargin, width: textWidth, height: fontSize),
+          fontPointSize: fontSize,
+          rotation: .pi / 2
+        )
+      } else {
+        // Landscape: no rotation. Anchor the box's right edge `edgeMargin`
+        // from the canvas's right edge and its bottom `endMargin` from the
+        // canvas's bottom, i.e. bottom-right.
+        return FilmDateStampLayout(
+          text: text,
+          frame: CGRect(
+            x: canvasSize.width - edgeMargin - textWidth,
+            y: endMargin,
+            width: textWidth,
+            height: fontSize
+          ),
+          fontPointSize: fontSize,
+          rotation: 0
+        )
+      }
+    }
+  }
+
+  /// Deterministic glyph advances for the seven-segment style: no fonts
+  /// involved, so width is a simple per-character sum.
+  static func sevenSegmentAdvance(for character: Character, fontSize: CGFloat) -> CGFloat {
+    switch character {
+    case " ": return fontSize * 0.45
+    case "'": return fontSize * 0.25
+    default: return fontSize * 0.62
+    }
+  }
+
+  static func sevenSegmentTextWidth(_ text: String, fontSize: CGFloat) -> CGFloat {
+    text.reduce(CGFloat(0)) { $0 + sevenSegmentAdvance(for: $1, fontSize: fontSize) }
   }
 }

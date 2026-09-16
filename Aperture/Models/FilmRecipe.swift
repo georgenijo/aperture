@@ -149,6 +149,9 @@ struct FilmParameters: Codable, Hashable, Sendable {
 enum FilmRecipeVersion {
   static let current = 3
   static let supported = 1...3
+  /// The first version whose manifests persist `stages` instead of the flat
+  /// v1 `parameters`.
+  static let stageSchema = 2
 }
 
 struct FilmRecipe: Codable, Hashable, Identifiable, Sendable {
@@ -353,18 +356,23 @@ extension AppliedFilmRecipe: Codable {
   init(from decoder: Decoder) throws {
     let values = try decoder.container(keyedBy: CodingKeys.self)
     let identifier = try values.decode(FilmRecipeIdentifier.self, forKey: .identifier)
+    var version = try values.decode(Int.self, forKey: .version)
     let stages: [FilmStage]
     if let decodedStages = try values.decodeIfPresent([FilmStage].self, forKey: .stages) {
       stages = decodedStages
     } else {
       // Pre-#17 manifests persisted a flat `FilmParameters` knob set; expand
-      // it into the equivalent fixed-order stage list on read.
+      // it into the equivalent fixed-order stage list on read. The values
+      // are the v1 pipeline's, so output is unchanged, but the in-memory
+      // recipe is now stage-shaped and re-encodes as the stage schema, so it
+      // reports the stage schema version rather than a hybrid.
       let legacyParameters = try values.decode(FilmParameters.self, forKey: .parameters)
       stages = FilmStage.legacyPipeline(parameters: legacyParameters, identifier: identifier)
+      version = max(version, FilmRecipeVersion.stageSchema)
     }
     self.init(
       identifier: identifier,
-      version: try values.decode(Int.self, forKey: .version),
+      version: version,
       seed: try values.decode(UInt64.self, forKey: .seed),
       stages: stages,
       resolvedSettings: try values.decode(FilmResolvedSettings.self, forKey: .resolvedSettings)

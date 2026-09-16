@@ -254,9 +254,9 @@ extension FilmProcessor {
   }
 
   func applyDateStamp(
-    _ image: CIImage, text: String, extent: CGRect, style: DateStampStage.Style = .monospaced
+    _ image: CIImage, text: String, stage: DateStampStage = DateStampStage(), extent: CGRect
   ) -> CIImage {
-    guard let stamp = FilmOverlayFactory.dateStampImage(text: text, extent: extent, style: style),
+    guard let stamp = FilmOverlayFactory.dateStampImage(text: text, extent: extent, stage: stage),
       let composite = CIFilter(name: "CISourceOverCompositing")
     else { return image }
     composite.setValue(stamp, forKey: kCIInputImageKey)

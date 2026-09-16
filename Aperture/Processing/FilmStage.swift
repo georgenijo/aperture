@@ -369,19 +369,35 @@ struct LightLeakStage: Codable, Hashable, Sendable {
     edges: [LightLeakDecision.Edge] = LightLeakDecision.Edge.allCases,
     alphaCap: Double = 0.68
   ) {
-    self.probability = probability
-    self.strength = strength
-    self.minWidth = minWidth
-    self.maxWidth = maxWidth
-    self.minPosition = minPosition
-    self.maxPosition = maxPosition
-    self.minAngle = minAngle
-    self.maxAngle = maxAngle
-    self.minIntensity = minIntensity
-    self.maxIntensity = maxIntensity
-    self.palette = palette
-    self.edges = edges
-    self.alphaCap = alphaCap
+    // Normalise so a hand-edited or corrupt manifest can never trap the
+    // renderer: reversed ranges are swapped, non-finite bounds fall back to
+    // the v1 constants, and an empty palette uses the default one.
+    self.probability = Self.unit(probability)
+    self.strength = Self.unit(strength)
+    (self.minWidth, self.maxWidth) = Self.ordered(minWidth, maxWidth, fallback: (0.16, 0.42))
+    (self.minPosition, self.maxPosition) = Self.ordered(
+      minPosition, maxPosition, fallback: (0.16, 0.84))
+    (self.minAngle, self.maxAngle) = Self.ordered(minAngle, maxAngle, fallback: (-0.42, 0.42))
+    (self.minIntensity, self.maxIntensity) = Self.ordered(
+      minIntensity, maxIntensity, fallback: (0.68, 1.0))
+    self.palette = palette.isEmpty ? LightLeakStage.defaultPalette : palette
+    // `edges` restricts which of the four sides a leak may be drawn from
+    // (issue #18's 1998 retune); an empty array falls back to all four so a
+    // corrupt or hand-edited manifest can't suppress every leak.
+    self.edges = edges.isEmpty ? LightLeakDecision.Edge.allCases : edges
+    self.alphaCap = Self.unit(alphaCap)
+  }
+
+  private static func unit(_ value: Double) -> Double {
+    guard value.isFinite else { return 0 }
+    return min(max(value, 0), 1)
+  }
+
+  private static func ordered(_ lower: Double, _ upper: Double, fallback: (Double, Double))
+    -> (Double, Double)
+  {
+    guard lower.isFinite, upper.isFinite else { return fallback }
+    return lower <= upper ? (lower, upper) : (upper, lower)
   }
 
   private enum CodingKeys: String, CodingKey {
@@ -453,27 +469,75 @@ struct VignetteStage: Codable, Hashable, Sendable {
   }
 }
 
-/// The persisted date-stamp overlay. `style` only ever renders one look
-/// today; it exists so a future recipe can request a different treatment
-/// without changing the render call sites.
+/// The persisted date-stamp overlay. `style` selects a rendering treatment;
+/// the geometry/colour fields below are only consumed by `.sevenSegment` —
+/// `.monospaced` ignores them and keeps its own hard-coded look so existing
+/// renders stay byte-identical.
 struct DateStampStage: Codable, Hashable, Sendable {
   enum Style: String, Codable, Hashable, Sendable {
     case monospaced
+    case sevenSegment
   }
 
   var style: Style = .monospaced
+  var red: Double = 193.0 / 255
+  var green: Double = 81.0 / 255
+  var blue: Double = 17.0 / 255
+  var alpha: Double = 0.95
+  /// × font size.
+  var glowRadiusScale: Double = 0.25
+  var glowAlpha: Double = 0.5
+  /// × shortest canvas side.
+  var fontSizeScale: Double = 0.028
+  /// × shortest canvas side; distance from the left edge in portrait / the
+  /// right edge in landscape.
+  var edgeMarginScale: Double = 0.035
+  /// × shortest canvas side; distance from the bottom edge.
+  var endMarginScale: Double = 0.11
 
-  init(style: Style = .monospaced) {
+  init(
+    style: Style = .monospaced,
+    red: Double = 193.0 / 255,
+    green: Double = 81.0 / 255,
+    blue: Double = 17.0 / 255,
+    alpha: Double = 0.95,
+    glowRadiusScale: Double = 0.25,
+    glowAlpha: Double = 0.5,
+    fontSizeScale: Double = 0.028,
+    edgeMarginScale: Double = 0.035,
+    endMarginScale: Double = 0.11
+  ) {
     self.style = style
+    self.red = red
+    self.green = green
+    self.blue = blue
+    self.alpha = alpha
+    self.glowRadiusScale = glowRadiusScale
+    self.glowAlpha = glowAlpha
+    self.fontSizeScale = fontSizeScale
+    self.edgeMarginScale = edgeMarginScale
+    self.endMarginScale = endMarginScale
   }
 
   private enum CodingKeys: String, CodingKey {
-    case style
+    case style, red, green, blue, alpha, glowRadiusScale, glowAlpha, fontSizeScale,
+      edgeMarginScale, endMarginScale
   }
 
   init(from decoder: Decoder) throws {
     let values = try decoder.container(keyedBy: CodingKeys.self)
-    self.init(style: try values.decodeIfPresent(Style.self, forKey: .style) ?? .monospaced)
+    self.init(
+      style: try values.decodeIfPresent(Style.self, forKey: .style) ?? .monospaced,
+      red: try values.decodeIfPresent(Double.self, forKey: .red) ?? 193.0 / 255,
+      green: try values.decodeIfPresent(Double.self, forKey: .green) ?? 81.0 / 255,
+      blue: try values.decodeIfPresent(Double.self, forKey: .blue) ?? 17.0 / 255,
+      alpha: try values.decodeIfPresent(Double.self, forKey: .alpha) ?? 0.95,
+      glowRadiusScale: try values.decodeIfPresent(Double.self, forKey: .glowRadiusScale) ?? 0.25,
+      glowAlpha: try values.decodeIfPresent(Double.self, forKey: .glowAlpha) ?? 0.5,
+      fontSizeScale: try values.decodeIfPresent(Double.self, forKey: .fontSizeScale) ?? 0.028,
+      edgeMarginScale: try values.decodeIfPresent(Double.self, forKey: .edgeMarginScale) ?? 0.035,
+      endMarginScale: try values.decodeIfPresent(Double.self, forKey: .endMarginScale) ?? 0.11
+    )
   }
 }
 
