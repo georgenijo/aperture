@@ -65,6 +65,17 @@
 		B10000010000000000000008 /* hdr-still-life.png in Resources */ = {isa = PBXBuildFile; fileRef = B10000020000000000000008 /* hdr-still-life.png */; };
 		B10000010000000000000009 /* night-flash.png in Resources */ = {isa = PBXBuildFile; fileRef = B10000020000000000000009 /* night-flash.png */; };
 		B1000001000000000000000A /* VideoProcessorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000002000000000000000B /* VideoProcessorTests.swift */; };
+		236A163ECF1F4D92B8E729ED /* GoldenRenderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11CEBF3501A5499C94EA2355 /* GoldenRenderTests.swift */; };
+		6047D15119A64069BC519955 /* golden-day-portrait-aperture-1998.png in Resources */ = {isa = PBXBuildFile; fileRef = B2947AE4AC054E3C8D388312 /* golden-day-portrait-aperture-1998.png */; };
+		9EA5A0E76941416E866BEC1A /* golden-day-portrait-aperture-night.png in Resources */ = {isa = PBXBuildFile; fileRef = 6DD6EDF18863463CBD7099DB /* golden-day-portrait-aperture-night.png */; };
+		F997DB7D00DB4DD8A4F9D8EB /* golden-day-portrait-aperture-cinema.png in Resources */ = {isa = PBXBuildFile; fileRef = 0CB36B39199B4FB6837AEC90 /* golden-day-portrait-aperture-cinema.png */; };
+		3D164AEED5A64584B12F2941 /* golden-day-portrait-aperture-legacy-original.png in Resources */ = {isa = PBXBuildFile; fileRef = 4A080B33961A40C288BFCB81 /* golden-day-portrait-aperture-legacy-original.png */; };
+		51BCE42A428E47628EA8CB4C /* golden-night-flash-aperture-1998.png in Resources */ = {isa = PBXBuildFile; fileRef = 0695E67B923C45118336D09D /* golden-night-flash-aperture-1998.png */; };
+		C26A1F625C9A4915A479BA58 /* golden-night-flash-aperture-night.png in Resources */ = {isa = PBXBuildFile; fileRef = 24AD0404454F4AD7B5502C77 /* golden-night-flash-aperture-night.png */; };
+		BC117A0E15E84DDCBED37EA1 /* golden-night-flash-aperture-cinema.png in Resources */ = {isa = PBXBuildFile; fileRef = 1A86B145D86A44C49D02681C /* golden-night-flash-aperture-cinema.png */; };
+		09C15B9C7918425F98DE9067 /* golden-hdr-still-life-aperture-1998.png in Resources */ = {isa = PBXBuildFile; fileRef = 34FD27FFDECD4B3A85F56EF6 /* golden-hdr-still-life-aperture-1998.png */; };
+		25D5C3CD95344ED8AA536400 /* golden-hdr-still-life-aperture-night.png in Resources */ = {isa = PBXBuildFile; fileRef = 6D7225069FA140D0AA9AEC17 /* golden-hdr-still-life-aperture-night.png */; };
+		D8313E6AE3DC437080A6A2AB /* golden-hdr-still-life-aperture-cinema.png in Resources */ = {isa = PBXBuildFile; fileRef = B01CE757550741A39C739D88 /* golden-hdr-still-life-aperture-cinema.png */; };
 		C10000010000000000000001 /* ApertureUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10000020000000000000001 /* ApertureUITests.swift */; };
 /* End PBXBuildFile section */
 
@@ -130,6 +141,17 @@
 		B10000020000000000000009 /* night-flash.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = night-flash.png; sourceTree = "<group>"; };
 		B10000020000000000000010 /* ApertureTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ApertureTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		B1000002000000000000000B /* VideoProcessorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoProcessorTests.swift; sourceTree = "<group>"; };
+		11CEBF3501A5499C94EA2355 /* GoldenRenderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoldenRenderTests.swift; sourceTree = "<group>"; };
+		B2947AE4AC054E3C8D388312 /* golden-day-portrait-aperture-1998.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "golden-day-portrait-aperture-1998.png"; sourceTree = "<group>"; };
+		6DD6EDF18863463CBD7099DB /* golden-day-portrait-aperture-night.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "golden-day-portrait-aperture-night.png"; sourceTree = "<group>"; };
+		0CB36B39199B4FB6837AEC90 /* golden-day-portrait-aperture-cinema.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "golden-day-portrait-aperture-cinema.png"; sourceTree = "<group>"; };
+		4A080B33961A40C288BFCB81 /* golden-day-portrait-aperture-legacy-original.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "golden-day-portrait-aperture-legacy-original.png"; sourceTree = "<group>"; };
+		0695E67B923C45118336D09D /* golden-night-flash-aperture-1998.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "golden-night-flash-aperture-1998.png"; sourceTree = "<group>"; };
+		24AD0404454F4AD7B5502C77 /* golden-night-flash-aperture-night.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "golden-night-flash-aperture-night.png"; sourceTree = "<group>"; };
+		1A86B145D86A44C49D02681C /* golden-night-flash-aperture-cinema.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "golden-night-flash-aperture-cinema.png"; sourceTree = "<group>"; };
+		34FD27FFDECD4B3A85F56EF6 /* golden-hdr-still-life-aperture-1998.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "golden-hdr-still-life-aperture-1998.png"; sourceTree = "<group>"; };
+		6D7225069FA140D0AA9AEC17 /* golden-hdr-still-life-aperture-night.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "golden-hdr-still-life-aperture-night.png"; sourceTree = "<group>"; };
+		B01CE757550741A39C739D88 /* golden-hdr-still-life-aperture-cinema.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "golden-hdr-still-life-aperture-cinema.png"; sourceTree = "<group>"; };
 		C10000020000000000000001 /* ApertureUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApertureUITests.swift; sourceTree = "<group>"; };
 		C10000020000000000000002 /* ApertureUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ApertureUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -245,6 +267,7 @@
 				B10000020000000000000005 /* ReferenceFixtureTests.swift */,
 				B10000020000000000000006 /* SettingsAndCacheTests.swift */,
 				B1000002000000000000000B /* VideoProcessorTests.swift */,
+				11CEBF3501A5499C94EA2355 /* GoldenRenderTests.swift */,
 				B10000040000000000000002 /* Fixtures */,
 			);
 			path = ApertureTests;
@@ -256,6 +279,16 @@
 				B10000020000000000000007 /* day-portrait.png */,
 				B10000020000000000000008 /* hdr-still-life.png */,
 				B10000020000000000000009 /* night-flash.png */,
+				B2947AE4AC054E3C8D388312 /* golden-day-portrait-aperture-1998.png */,
+				6DD6EDF18863463CBD7099DB /* golden-day-portrait-aperture-night.png */,
+				0CB36B39199B4FB6837AEC90 /* golden-day-portrait-aperture-cinema.png */,
+				4A080B33961A40C288BFCB81 /* golden-day-portrait-aperture-legacy-original.png */,
+				0695E67B923C45118336D09D /* golden-night-flash-aperture-1998.png */,
+				24AD0404454F4AD7B5502C77 /* golden-night-flash-aperture-night.png */,
+				1A86B145D86A44C49D02681C /* golden-night-flash-aperture-cinema.png */,
+				34FD27FFDECD4B3A85F56EF6 /* golden-hdr-still-life-aperture-1998.png */,
+				6D7225069FA140D0AA9AEC17 /* golden-hdr-still-life-aperture-night.png */,
+				B01CE757550741A39C739D88 /* golden-hdr-still-life-aperture-cinema.png */,
 			);
 			path = Fixtures;
 			sourceTree = "<group>";
@@ -414,6 +447,16 @@
 				B10000010000000000000007 /* day-portrait.png in Resources */,
 				B10000010000000000000008 /* hdr-still-life.png in Resources */,
 				B10000010000000000000009 /* night-flash.png in Resources */,
+				6047D15119A64069BC519955 /* golden-day-portrait-aperture-1998.png in Resources */,
+				9EA5A0E76941416E866BEC1A /* golden-day-portrait-aperture-night.png in Resources */,
+				F997DB7D00DB4DD8A4F9D8EB /* golden-day-portrait-aperture-cinema.png in Resources */,
+				3D164AEED5A64584B12F2941 /* golden-day-portrait-aperture-legacy-original.png in Resources */,
+				51BCE42A428E47628EA8CB4C /* golden-night-flash-aperture-1998.png in Resources */,
+				C26A1F625C9A4915A479BA58 /* golden-night-flash-aperture-night.png in Resources */,
+				BC117A0E15E84DDCBED37EA1 /* golden-night-flash-aperture-cinema.png in Resources */,
+				09C15B9C7918425F98DE9067 /* golden-hdr-still-life-aperture-1998.png in Resources */,
+				25D5C3CD95344ED8AA536400 /* golden-hdr-still-life-aperture-night.png in Resources */,
+				D8313E6AE3DC437080A6A2AB /* golden-hdr-still-life-aperture-cinema.png in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -491,6 +534,7 @@
 				B10000010000000000000005 /* ReferenceFixtureTests.swift in Sources */,
 				B10000010000000000000006 /* SettingsAndCacheTests.swift in Sources */,
 				B1000001000000000000000A /* VideoProcessorTests.swift in Sources */,
+				236A163ECF1F4D92B8E729ED /* GoldenRenderTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
