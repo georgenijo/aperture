@@ -6,6 +6,7 @@ struct MediaThumbnailView: View {
   let mediaLibrary: MediaLibrary
   let thumbnailService: ThumbnailService
   var maximumPixelDimension: Int = 420
+  var showsProcessingBadge = true
 
   @State private var image: UIImage?
   @State private var failed = false
@@ -27,19 +28,18 @@ struct MediaThumbnailView: View {
         ProgressView()
           .tint(ApertureStyle.amber)
       }
-      if item.processing.phase == .processing {
+      if showsProcessingBadge && item.processing.phase == .processing {
         VStack {
           Spacer()
-          HStack(spacing: 5) {
-            ProgressView().controlSize(.mini).tint(ApertureStyle.amber)
-            Text("Developing")
-              .font(.caption2.weight(.semibold))
+          HStack {
+            Spacer()
+            ProgressView()
+              .controlSize(.mini)
+              .tint(ApertureStyle.amber)
+              .frame(width: 22, height: 22)
+              .background(.black.opacity(0.72), in: Circle())
+              .padding(6)
           }
-          .foregroundStyle(ApertureStyle.bone)
-          .padding(.horizontal, 8)
-          .padding(.vertical, 5)
-          .background(.black.opacity(0.72), in: Capsule())
-          .padding(7)
         }
       }
     }

@@ -16,6 +16,7 @@ enum ApertureStyle {
 
   static let controlSize: CGFloat = 48
   static let smallControlSize: CGFloat = 40
+  static let bareControlSize: CGFloat = 44
   static let cardRadius: CGFloat = 16
 
   static func accent(for id: FilmRecipeIdentifier) -> Color {
@@ -41,6 +42,23 @@ struct ApertureIconButtonStyle: ButtonStyle {
       )
       .overlay(Circle().stroke(ApertureStyle.line, lineWidth: 1))
       .scaleEffect(reduceMotion ? 1 : (configuration.isPressed ? 0.94 : 1))
+      .animation(reduceMotion ? nil : .easeOut(duration: 0.12), value: configuration.isPressed)
+  }
+}
+
+/// An icon with a full-size hit target and no chrome, for controls that sit
+/// on the camera's own black surface rather than over the live image.
+struct ApertureBareIconButtonStyle: ButtonStyle {
+  @Environment(\.isEnabled) private var isEnabled
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+  func makeBody(configuration: Configuration) -> some View {
+    configuration.label
+      .font(.system(size: 18, weight: .medium))
+      .frame(width: ApertureStyle.bareControlSize, height: ApertureStyle.bareControlSize)
+      .contentShape(Circle())
+      .opacity(isEnabled ? (configuration.isPressed ? 0.6 : 1) : 0.4)
+      .scaleEffect(reduceMotion ? 1 : (configuration.isPressed ? 0.92 : 1))
       .animation(reduceMotion ? nil : .easeOut(duration: 0.12), value: configuration.isPressed)
   }
 }

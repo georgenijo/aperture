@@ -110,8 +110,8 @@ struct ContentView: View {
             retry: { model.retryCameraIssue() },
             dismiss: { model.dismissCameraIssue() }
           )
-          .padding(.top, proxy.safeAreaInsets.top + (isLandscape ? 8 : 62))
-          .padding(.horizontal, isLandscape ? 16 : 16)
+          .padding(.top, proxy.safeAreaInsets.top + (isLandscape ? 8 : Layout.portraitTopReserve))
+          .padding(.horizontal, 16)
           .transition(reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity))
         }
         if showFlash {
@@ -119,6 +119,13 @@ struct ContentView: View {
         }
       }
     }
+  }
+
+  private enum Layout {
+    /// One row of 44pt controls plus breathing room above the image.
+    static let portraitTopReserve: CGFloat = 56
+    /// Mode strip, shutter row, and their spacing below the image.
+    static let portraitBottomReserve: CGFloat = 156
   }
 
   private var previewAspectRatio: CGFloat {
@@ -136,8 +143,6 @@ struct ContentView: View {
     let safeLeading = proxy.safeAreaInsets.leading
     let safeTrailing = proxy.safeAreaInsets.trailing
     let dockWidth = isLandscape ? min(max(220, proxy.size.width * 0.28), 300) : 0
-    let portraitTopReserve: CGFloat = 68
-    let portraitBottomReserve: CGFloat = 170
     let availableWidth = isLandscape
       ? max(1, proxy.size.width - dockWidth - safeLeading - safeTrailing)
       : max(1, proxy.size.width - safeLeading - safeTrailing)
@@ -145,23 +150,22 @@ struct ContentView: View {
       ? max(1, proxy.size.height - safeTop - safeBottom)
       : max(
         1,
-        proxy.size.height - safeTop - safeBottom - portraitTopReserve - portraitBottomReserve)
+        proxy.size.height - safeTop - safeBottom - Layout.portraitTopReserve
+          - Layout.portraitBottomReserve)
     let orientedPreviewAspectRatio = isLandscape ? previewAspectRatio : 1 / previewAspectRatio
     let previewWidth = min(availableWidth, availableHeight * orientedPreviewAspectRatio)
     let previewHeight = previewWidth / orientedPreviewAspectRatio
-    let previewCenterX = isLandscape
-      ? safeLeading + (availableWidth / 2)
-      : safeLeading + (availableWidth / 2)
+    let previewCenterX = safeLeading + (availableWidth / 2)
     let previewCenterY = isLandscape
       ? safeTop + (availableHeight / 2)
-      : safeTop + portraitTopReserve + (previewHeight / 2)
+      : safeTop + Layout.portraitTopReserve + (previewHeight / 2)
 
     return ZStack(alignment: .topLeading) {
       viewfinder
         .frame(width: previewWidth, height: previewHeight)
         .overlay(alignment: .bottom) {
           lensRail
-            .padding(.bottom, 12)
+            .padding(.bottom, 10)
         }
         .position(x: previewCenterX, y: previewCenterY)
 
@@ -186,12 +190,19 @@ struct ContentView: View {
     safeTrailing: CGFloat
   ) -> some View {
     if isLandscape {
-      VStack(spacing: 8) {
-        topBar(landscape: true)
+      VStack(spacing: 12) {
+        HStack(spacing: 0) {
+          flashButton
+          Spacer(minLength: 0)
+          settingsButton
+        }
+        filmButton
         Spacer(minLength: 4)
-        bottomBar
+        modeRow
+        shutterRow
       }
-      .padding(.top, safeTop)
+      .padding(.horizontal, 12)
+      .padding(.top, safeTop + 8)
       .padding(.bottom, safeBottom)
       .frame(width: dockWidth, height: proxy.size.height)
       .position(
@@ -200,7 +211,7 @@ struct ContentView: View {
       )
     } else {
       VStack(spacing: 0) {
-        topBar(landscape: false)
+        topBar
         Spacer(minLength: 0)
         bottomBar
       }
@@ -226,12 +237,6 @@ struct ContentView: View {
           },
           onPinchZoom: { rawZoom in model.zoom(to: rawZoom) },
           onCaptureRotation: model.cameraManager.setCaptureRotationAngle(_:))
-        LinearGradient(
-          colors: [.black.opacity(0.58), .clear, .black.opacity(0.78)],
-          startPoint: .top,
-          endPoint: .bottom
-        )
-        .allowsHitTesting(false)
         if let focusPoint {
           FocusIndicator()
             .position(x: focusPoint.x * proxy.size.width, y: focusPoint.y * proxy.size.height)
@@ -241,41 +246,25 @@ struct ContentView: View {
         }
       }
       .clipped()
-      .overlay(Rectangle().stroke(.white.opacity(0.1), lineWidth: 1))
     }
     .accessibilityElement(children: .contain)
     .accessibilityLabel("Camera viewfinder")
     .accessibilityHint("Double tap to focus at the center")
   }
 
-  @ViewBuilder
-  private func topBar(landscape: Bool) -> some View {
-    if landscape {
-      VStack(spacing: 8) {
-        HStack(spacing: 8) {
-          flashButton
-          Spacer(minLength: 0)
-          filmButton
-        }
-        HStack(spacing: 8) {
-          Spacer(minLength: 0)
-          switchCameraButton
-          settingsButton
-        }
-      }
-      .padding(.horizontal, 8)
-      .padding(.top, 8)
-    } else {
-      HStack(spacing: 12) {
+  /// Flash on the left, film in the middle, settings on the right. The film
+  /// chip is the only text above the image, so it stays small and bare.
+  private var topBar: some View {
+    ZStack {
+      HStack(spacing: 0) {
         flashButton
         Spacer(minLength: 0)
-        filmButton
-        switchCameraButton
         settingsButton
       }
-      .padding(.horizontal, 18)
-      .padding(.top, 8)
+      filmButton
     }
+    .padding(.horizontal, 12)
+    .padding(.top, 6)
   }
 
   @ViewBuilder
@@ -284,14 +273,11 @@ struct ContentView: View {
       Button {
         showFlashMenu.toggle()
       } label: {
-        Label(displayFlashMode.label, systemImage: displayFlashMode.systemImage)
-          .font(.caption.weight(.semibold))
-          .foregroundStyle(ApertureStyle.bone)
-          .padding(.horizontal, 11)
-          .frame(minHeight: 44)
-          .background(ApertureStyle.panel.opacity(0.82), in: Capsule())
+        Image(systemName: displayFlashMode.systemImage)
+          .foregroundStyle(
+            displayFlashMode == .off ? ApertureStyle.bone : ApertureStyle.amber)
       }
-      .lineLimit(1)
+      .buttonStyle(ApertureBareIconButtonStyle())
       .accessibilityLabel("Flash")
       .accessibilityValue(displayFlashMode.label)
       .accessibilityHint("Choose flash mode")
@@ -300,6 +286,8 @@ struct ContentView: View {
           Button(mode.label) { model.setFlash(mode) }
         }
       }
+    } else {
+      Color.clear.frame(width: ApertureStyle.bareControlSize, height: ApertureStyle.bareControlSize)
     }
   }
 
@@ -307,16 +295,21 @@ struct ContentView: View {
     Button {
       showFilmPicker = true
     } label: {
-      HStack(spacing: 5) {
-        Circle().fill(ApertureStyle.amber).frame(width: 7, height: 7)
-        Text(selectedFilmName).font(.caption.weight(.bold)).lineLimit(1)
+      HStack(spacing: 6) {
+        Circle()
+          .fill(ApertureStyle.accent(for: model.settings.selectedFilm))
+          .frame(width: 6, height: 6)
+        Text(selectedFilmName.uppercased())
+          .font(.system(.caption, design: .rounded).weight(.bold))
+          .tracking(1.4)
+          .lineLimit(1)
       }
       .foregroundStyle(ApertureStyle.bone)
       .padding(.horizontal, 12)
-      .frame(minHeight: 44)
-      .background(ApertureStyle.panel.opacity(0.82), in: Capsule())
+      .frame(minHeight: ApertureStyle.bareControlSize)
+      .contentShape(Rectangle())
     }
-    .layoutPriority(1)
+    .buttonStyle(.plain)
     .accessibilityLabel("Film")
     .accessibilityValue(selectedFilmName)
     .accessibilityHint("Choose a film recipe")
@@ -326,7 +319,7 @@ struct ContentView: View {
     Button {
       model.switchCamera()
     } label: {
-      Image(systemName: "camera.rotate")
+      Image(systemName: "arrow.triangle.2.circlepath.camera")
     }
     .buttonStyle(ApertureIconButtonStyle())
     .accessibilityLabel("Switch camera")
@@ -339,7 +332,7 @@ struct ContentView: View {
     } label: {
       Image(systemName: "gearshape")
     }
-    .buttonStyle(ApertureIconButtonStyle())
+    .buttonStyle(ApertureBareIconButtonStyle())
     .accessibilityIdentifier("camera-settings")
     .accessibilityLabel("Settings")
     .accessibilityHint("Open camera and processing settings")
@@ -356,122 +349,160 @@ struct ContentView: View {
 
   private var bottomBar: some View {
     VStack(spacing: 10) {
-      modeCapsule
-      HStack(alignment: .center) {
-        Button {
-          showLab = true
-        } label: {
-          ZStack(alignment: .topTrailing) {
-            if let item = model.latestItem {
-              MediaThumbnailView(
-                item: item, mediaLibrary: model.mediaLibrary,
-                thumbnailService: model.thumbnailService, maximumPixelDimension: 120
-              )
-              .frame(width: 52, height: 52)
-              .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-            } else {
-              Image(systemName: "square.stack.3d.down.right")
-                .font(.title3)
-                .foregroundStyle(ApertureStyle.bone)
-                .frame(width: 52, height: 52)
-                .background(
-                  ApertureStyle.panel, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-            }
-            if !model.processingIDs.isEmpty {
-              ProgressView()
-                .controlSize(.small)
-                .tint(ApertureStyle.ink)
-                .frame(width: 24, height: 24)
-                .background(ApertureStyle.amber, in: Circle())
-                .offset(x: 6, y: -6)
-                .accessibilityHidden(true)
-            } else if !model.items.isEmpty {
-              Text("\(model.items.count)")
-                .font(.caption2.weight(.bold))
-                .foregroundStyle(ApertureStyle.ink)
-                .padding(4)
-                .background(ApertureStyle.amber, in: Circle())
-                .offset(x: 5, y: -5)
-            }
-          }
-        }
-        .accessibilityIdentifier("camera-lab")
-        .accessibilityLabel("Lab")
-        .accessibilityValue(model.items.isEmpty ? "Empty" : "\(model.items.count) media")
-        Spacer()
-        VStack(spacing: 7) {
-          if model.isRecording {
-            Text(formattedDuration)
-              .font(.caption.monospacedDigit().weight(.bold))
-              .foregroundStyle(.red)
-              .accessibilityHidden(true)
-          }
-          Button {
-            captureAction()
-          } label: {
-            ZStack {
-              Circle().fill(model.isRecording ? .red : ApertureStyle.bone).frame(
-                width: 76, height: 76)
-              Circle().stroke(
-                model.isRecording ? .red.opacity(0.32) : ApertureStyle.amber, lineWidth: 3
-              ).frame(width: 88, height: 88)
-              if model.isRecording {
-                RoundedRectangle(cornerRadius: 5).fill(.white).frame(width: 23, height: 23)
-              }
-            }
-          }
-          .buttonStyle(.plain)
-          .disabled(!shutterIsReady)
-          .accessibilityIdentifier("camera-shutter")
-          .accessibilityLabel(
-            model.isRecording
-              ? "Stop recording"
-              : (model.captureMode == .video ? "Start recording" : "Take photograph")
-          )
-          .accessibilityValue(shutterAccessibilityValue)
-          .accessibilityHint(shutterAccessibilityHint)
-        }
-        Spacer()
-        Color.clear.frame(width: 52, height: 52)
-      }
+      modeRow
+      shutterRow
     }
-    .padding(.horizontal, 20)
-    .padding(.top, 12)
+    .padding(.horizontal, 28)
+    .padding(.top, 8)
   }
 
-  private var modeCapsule: some View {
-    Picker(
-      "Capture mode",
-      selection: Binding(
-        get: { model.captureMode },
-        set: { model.setCaptureMode($0) }
-      )
-    ) {
+  /// The row above the shutter: the mode words normally, the elapsed time
+  /// while recording. Both occupy the same 44pt slot, so the timer never
+  /// has to float over the shutter or steal space from the mode labels.
+  @ViewBuilder
+  private var modeRow: some View {
+    if model.isRecording {
+      recordingReadout
+    } else {
+      modeStrip
+    }
+  }
+
+  private var recordingReadout: some View {
+    HStack(spacing: 6) {
+      Circle().fill(.red).frame(width: 8, height: 8)
+      Text(formattedDuration)
+        .font(.system(.caption, design: .rounded).weight(.bold))
+        .monospacedDigit()
+        .foregroundStyle(.red)
+    }
+    .frame(minHeight: ApertureStyle.bareControlSize)
+    // The shutter button already reports the elapsed time as its value.
+    .accessibilityHidden(true)
+  }
+
+  /// Two words instead of a boxed segmented control.
+  private var modeStrip: some View {
+    HStack(spacing: 26) {
       ForEach(CameraCaptureMode.allCases, id: \.self) { mode in
-        Text(mode.label).tag(mode)
+        let isSelected = model.captureMode == mode
+        Button {
+          model.setCaptureMode(mode)
+        } label: {
+          Text(mode.label.uppercased())
+            .font(.system(.caption, design: .rounded).weight(.bold))
+            .tracking(1.6)
+            .foregroundStyle(isSelected ? ApertureStyle.amber : ApertureStyle.quiet)
+            .frame(minWidth: ApertureStyle.bareControlSize, minHeight: ApertureStyle.bareControlSize)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(mode.label)
+        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
       }
     }
-    .pickerStyle(.segmented)
-    .frame(width: 142)
-    .frame(minHeight: 44)
     .disabled(model.isRecording)
+    .accessibilityElement(children: .contain)
     .accessibilityLabel("Capture mode")
     .accessibilityValue(model.captureMode.label)
-    .accessibilityHint("Choose Photo or Video")
+  }
+
+  private var shutterRow: some View {
+    HStack(alignment: .center) {
+      labButton
+      Spacer(minLength: 0)
+      shutterButton
+      Spacer(minLength: 0)
+      switchCameraButton
+    }
+  }
+
+  private var labButton: some View {
+    Button {
+      showLab = true
+    } label: {
+      ZStack(alignment: .topTrailing) {
+        if let item = model.latestItem {
+          MediaThumbnailView(
+            item: item, mediaLibrary: model.mediaLibrary,
+            thumbnailService: model.thumbnailService, maximumPixelDimension: 120,
+            showsProcessingBadge: false
+          )
+          .frame(width: 48, height: 48)
+          .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+          .overlay(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+              .stroke(ApertureStyle.line, lineWidth: 1)
+          )
+        } else {
+          RoundedRectangle(cornerRadius: 10, style: .continuous)
+            .fill(ApertureStyle.panel)
+            .frame(width: 48, height: 48)
+            .overlay(
+              RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .stroke(ApertureStyle.line, lineWidth: 1)
+            )
+        }
+        if !model.processingIDs.isEmpty {
+          ProgressView()
+            .controlSize(.mini)
+            .tint(ApertureStyle.ink)
+            .frame(width: 18, height: 18)
+            .background(ApertureStyle.amber, in: Circle())
+            .offset(x: 5, y: -5)
+            .accessibilityHidden(true)
+        }
+      }
+    }
+    .buttonStyle(.plain)
+    .accessibilityIdentifier("camera-lab")
+    .accessibilityLabel("Lab")
+    .accessibilityValue(model.items.isEmpty ? "Empty" : "\(model.items.count) media")
+  }
+
+  private var shutterButton: some View {
+    Button {
+      captureAction()
+    } label: {
+      ZStack {
+        Circle()
+          .stroke(model.isRecording ? .red : ApertureStyle.amber, lineWidth: 2.5)
+          .frame(width: 82, height: 82)
+        if model.isRecording {
+          RoundedRectangle(cornerRadius: 6, style: .continuous)
+            .fill(.red)
+            .frame(width: 30, height: 30)
+        } else {
+          Circle().fill(ApertureStyle.bone).frame(width: 68, height: 68)
+        }
+      }
+      .frame(width: 84, height: 84)
+    }
+    .buttonStyle(.plain)
+    .disabled(!shutterIsReady)
+    .opacity(shutterIsReady ? 1 : 0.45)
+    .accessibilityIdentifier("camera-shutter")
+    .accessibilityLabel(
+      model.isRecording
+        ? "Stop recording"
+        : (model.captureMode == .video ? "Start recording" : "Take photograph")
+    )
+    .accessibilityValue(shutterAccessibilityValue)
+    .accessibilityHint(shutterAccessibilityHint)
   }
 
   private var cameraUnavailableSurface: some View {
     VStack(spacing: 0) {
       Spacer()
       Image(systemName: "camera.fill")
-        .font(.system(size: 50, weight: .light))
+        .font(.system(size: 44, weight: .light))
         .foregroundStyle(ApertureStyle.amber)
         .padding(.bottom, 18)
       Text(unavailableTitle)
-        .font(.title2.weight(.semibold)).foregroundStyle(ApertureStyle.bone)
+        .font(.title3.weight(.semibold)).foregroundStyle(ApertureStyle.bone)
       Text(unavailableMessage)
         .font(.subheadline).foregroundStyle(ApertureStyle.muted)
-        .multilineTextAlignment(.center).padding(.horizontal, 34).padding(.top, 8)
+        .multilineTextAlignment(.center).padding(.horizontal, 40).padding(.top, 6)
       if model.cameraAuthorizationStatus == .denied {
         Button("Open Settings") { openSystemSettings() }
           .buttonStyle(.borderedProminent).tint(ApertureStyle.amber).foregroundStyle(
@@ -527,11 +558,9 @@ struct ContentView: View {
 
   private var unavailableMessage: String {
     if model.cameraAuthorizationStatus == .denied {
-      return
-        "Aperture can still show your Lab and settings. Enable camera access to make new photographs."
+      return "Turn on camera access in Settings to shoot. Your Lab is still here."
     }
-    return model.cameraIssue?.message
-      ?? "Aperture can’t start the viewfinder right now. Your local Lab is still available."
+    return model.cameraIssue?.message ?? "The viewfinder can’t start right now."
   }
 
   private func showFocus(at point: CGPoint) {

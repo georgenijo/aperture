@@ -27,14 +27,12 @@ struct CameraZoomControl: View {
       if options.isEmpty {
         EmptyView()
       } else {
-        HStack(spacing: 2) {
+        HStack(spacing: 0) {
           ForEach(options) { option in
             optionButton(for: option)
           }
         }
-        .padding(4)
-        .background(.black.opacity(0.62), in: Capsule())
-        .overlay(Capsule().stroke(.white.opacity(0.14), lineWidth: 1))
+        .background(.black.opacity(0.5), in: Capsule())
         .fixedSize(horizontal: true, vertical: true)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Camera zoom")
@@ -51,19 +49,17 @@ struct CameraZoomControl: View {
       onSelect(option)
     } label: {
       Text(option.label)
-        .font(.caption.weight(.bold))
+        .font(.caption2.weight(.bold))
         .monospacedDigit()
         .foregroundStyle(isSelected ? ApertureStyle.ink : ApertureStyle.bone)
-        .frame(width: 44, height: 44)
-        .contentShape(Circle())
+        .frame(width: 38, height: 38)
         .background(
           isSelected ? ApertureStyle.amber : .clear,
           in: Circle()
         )
-        .overlay(
-          Circle().stroke(
-            isSelected ? ApertureStyle.amber.opacity(0.95) : .clear, lineWidth: 1)
-        )
+        // The disc stays small; the tap target does not.
+        .frame(width: 44, height: 44)
+        .contentShape(Rectangle())
     }
     .buttonStyle(CameraZoomOptionButtonStyle())
     .accessibilityLabel("Zoom \(option.label)")
