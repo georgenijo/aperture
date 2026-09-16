@@ -9,29 +9,18 @@ struct FilmPickerView: View {
       ZStack {
         ApertureStyle.ink.ignoresSafeArea()
         ScrollView {
-          VStack(alignment: .leading, spacing: 18) {
-            header
-            VStack(spacing: 10) {
-              ForEach(FilmRecipeCatalog.all) { film in
-                filmButton(film)
-              }
+          VStack(spacing: 10) {
+            ForEach(FilmRecipeCatalog.all) { film in
+              filmButton(film)
             }
-            .padding(.horizontal, 16)
-
-            Text("Aperture develops each frame in the background. Pick a character and keep shooting.")
-              .font(.caption)
-              .foregroundStyle(ApertureStyle.quiet)
-              .multilineTextAlignment(.center)
-              .frame(maxWidth: .infinity)
-              .padding(.horizontal, 30)
-              .padding(.top, 2)
           }
-          .padding(.top, 8)
+          .padding(.horizontal, 16)
+          .padding(.top, 12)
           .padding(.bottom, 26)
         }
         .scrollIndicators(.hidden)
       }
-      .navigationTitle("Choose Film")
+      .navigationTitle("Film")
       .navigationBarTitleDisplayMode(.inline)
       .toolbarColorScheme(.dark, for: .navigationBar)
       .toolbar {
@@ -45,24 +34,6 @@ struct FilmPickerView: View {
     .presentationDetents([.medium])
     .presentationDragIndicator(.visible)
     .preferredColorScheme(.dark)
-  }
-
-  private var header: some View {
-    VStack(alignment: .leading, spacing: 8) {
-      ApertureSectionLabel("Film stock", detail: "\(FilmRecipeCatalog.all.count) recipes")
-      HStack(alignment: .firstTextBaseline, spacing: 8) {
-        Text("Three films.")
-          .font(.title2.weight(.semibold))
-          .foregroundStyle(ApertureStyle.bone)
-        Text("No editing required.")
-          .font(.subheadline)
-          .foregroundStyle(ApertureStyle.muted)
-      }
-      Text("Each recipe gives the Lab a different point of view.")
-        .font(.subheadline)
-        .foregroundStyle(ApertureStyle.muted)
-    }
-    .padding(.horizontal, 20)
   }
 
   private func filmButton(_ film: FilmRecipe) -> some View {
@@ -83,17 +54,9 @@ struct FilmPickerView: View {
           }
           .accessibilityHidden(true)
         VStack(alignment: .leading, spacing: 5) {
-          HStack(spacing: 7) {
-            Text(film.displayName)
-              .font(.headline)
-              .foregroundStyle(ApertureStyle.bone)
-            if selectedFilm == film.id {
-              Text("CURRENT")
-                .font(.system(size: 9, weight: .bold, design: .rounded))
-                .tracking(0.8)
-                .foregroundStyle(ApertureStyle.accent(for: film.id))
-            }
-          }
+          Text(film.displayName)
+            .font(.headline)
+            .foregroundStyle(ApertureStyle.bone)
           Text(description(for: film.id))
             .font(.caption)
             .foregroundStyle(ApertureStyle.muted)

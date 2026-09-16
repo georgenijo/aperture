@@ -172,7 +172,7 @@ struct PhotoDetailView: View {
     let recipe = item.recipe.identifier.rawValue
       .replacingOccurrences(of: "aperture.", with: "")
       .capitalized
-    return "\(mediaNoun(for: item).capitalized) · \(recipe)"
+    return recipe
   }
 
   private var currentIndex: Int {
@@ -218,32 +218,15 @@ private struct DetailPage: View {
       await load()
     }
     .overlay(alignment: .bottom) {
-      VStack(spacing: 5) {
-        HStack(spacing: 6) {
-          Circle().fill(ApertureStyle.amber).frame(width: 5, height: 5)
-          Text(item.mediaType == .video ? "DEVELOPED FILM" : "DEVELOPED FRAME")
-        }
-        .font(.system(size: 9, weight: .bold, design: .rounded))
-        .tracking(1.2)
-        .foregroundStyle(ApertureStyle.amber)
-        Text(
-          item.recipe.identifier.rawValue.replacingOccurrences(of: "aperture.", with: "")
-            .uppercased()
-        )
-        .font(.caption2.weight(.bold)).tracking(1.4)
-        Text(item.capturedAt.formatted(date: .abbreviated, time: .shortened))
-          .font(.caption2)
-      }
-      .foregroundStyle(ApertureStyle.bone.opacity(0.82))
-      .padding(.horizontal, 18)
-      .padding(.vertical, 11)
-      .background(.black.opacity(0.42), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-      .overlay(
-        RoundedRectangle(cornerRadius: 14, style: .continuous)
-          .stroke(.white.opacity(0.1), lineWidth: 1)
-      )
-      .padding(.horizontal, 18)
-      .padding(.bottom, 18)
+      Text(item.capturedAt.formatted(date: .abbreviated, time: .shortened))
+        .font(.caption2.weight(.medium))
+        .foregroundStyle(ApertureStyle.bone.opacity(0.8))
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(.black.opacity(0.45), in: Capsule())
+        .padding(.bottom, 14)
+        .accessibilityLabel("Captured")
+        .accessibilityValue(item.capturedAt.formatted(date: .abbreviated, time: .shortened))
     }
     .accessibilityElement(children: .contain)
     .accessibilityIdentifier("detail-item-\(item.id.uuidString)")

@@ -87,6 +87,29 @@ final class ApertureUITests: XCTestCase {
     XCTAssertTrue(app.staticTexts["Delete this media?"].exists)
   }
 
+  /// Regression guard for the iOS 26 Lab layout: a full-width grid body was
+  /// laid out under the navigation bar (first tile at y=2). The grid's edge
+  /// inset keeps the first row below the bar; this measures that it stays so.
+  func testLabGridStartsBelowNavigationBar() {
+    let app = launch(seededLibrary: true)
+    let firstID = "A7B4A9E8-3F04-4B3A-9DD4-6EAFB4F4A198"
+
+    XCTAssertTrue(app.buttons["camera-lab"].waitForExistence(timeout: 10))
+    app.buttons["camera-lab"].tap()
+    let navigationBar = app.navigationBars["Gallery"]
+    XCTAssertTrue(navigationBar.waitForExistence(timeout: 10))
+    let firstTile = app.buttons["lab-item-\(firstID)"]
+    XCTAssertTrue(firstTile.waitForExistence(timeout: 10))
+
+    let barFrame = navigationBar.frame
+    let tileFrame = firstTile.frame
+    XCTAssertGreaterThan(barFrame.height, 0)
+    XCTAssertGreaterThanOrEqual(
+      tileFrame.minY, barFrame.maxY,
+      "First Lab tile \(tileFrame) is laid out under the navigation bar \(barFrame)"
+    )
+  }
+
   func testPhotoDetailSwipesBetweenGalleryItems() {
     let app = launch(seededLibrary: true)
     let firstID = "A7B4A9E8-3F04-4B3A-9DD4-6EAFB4F4A198"
