@@ -31,11 +31,13 @@ final class DateStampOverlayTests: XCTestCase {
     // x: [frame.minX - fontPointSize, frame.minX], y: [frame.minY, frame.minY + frame.width].
     let visualMinX = layout.frame.minX - layout.fontPointSize
     let visualMaxX = layout.frame.minX
-    XCTAssertGreaterThanOrEqual(visualMinX, 0, "the glyph must not run off the left edge")
+    let shortestSide = min(canvasSize.width, canvasSize.height)
+    XCTAssertEqual(
+      visualMinX / shortestSide, 0.035, accuracy: 0.001,
+      "the gap between the left edge and the nearest glyph edge is the 3.5% margin")
     XCTAssertLessThan(
       visualMaxX, canvasSize.width * 0.10, "the stamp should hug the left 10% of the width")
 
-    let shortestSide = min(canvasSize.width, canvasSize.height)
     XCTAssertEqual(layout.frame.minY / shortestSide, 0.11, accuracy: 0.001)
   }
 

@@ -181,20 +181,18 @@ struct FilmDateStampLayout: Hashable, Sendable {
       if isPortrait {
         // Bottom-left origin coordinate space (Core Graphics/Core Image
         // convention: y increases upward). The frame below is the
-        // *unrotated* text box: it starts at (edgeMargin, endMargin) with
-        // width = textWidth (the advance direction) and height = fontSize
-        // (the glyph cell). Rotating it by +90° about its own origin
-        // (edgeMargin, endMargin) sweeps the advance direction from +x to
-        // +y — i.e. the text climbs upward from that pivot — while the
-        // glyph-cell height sweeps from +y to -x, landing on the near
-        // (ascender) side at `edgeMargin - fontSize`, closer to the true
-        // left edge than the pivot itself. Because `fontSizeScale <
-        // edgeMarginScale` by default, that near side stays a positive
-        // distance from x = 0, leaving a uniform gap between the image edge
-        // and the glyphs regardless of font size.
+        // *unrotated* text box with width = textWidth (the advance
+        // direction) and height = fontSize (the glyph cell). Rotating it by
+        // +90° about its own origin sweeps the advance direction from +x to
+        // +y — the text climbs upward from that pivot — while the glyph-cell
+        // height sweeps from +y to -x, so the glyphs occupy
+        // x: [pivot - fontSize, pivot]. Pivoting at `edgeMargin + fontSize`
+        // therefore leaves exactly `edgeMargin` between the image's left
+        // edge and the nearest glyph edge, regardless of font size.
         return FilmDateStampLayout(
           text: text,
-          frame: CGRect(x: edgeMargin, y: endMargin, width: textWidth, height: fontSize),
+          frame: CGRect(
+            x: edgeMargin + fontSize, y: endMargin, width: textWidth, height: fontSize),
           fontPointSize: fontSize,
           rotation: .pi / 2
         )
