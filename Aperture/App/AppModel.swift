@@ -2,6 +2,7 @@ import AVFoundation
 import Combine
 import Foundation
 import UIKit
+import os
 
 @MainActor
 final class AppModel: ObservableObject {
@@ -419,5 +420,99 @@ extension CapturedFlashMode {
     case .on: self = .on
     case .off: self = .off
     }
+  }
+}
+
+/// Wall-clock timings for the interactions that are supposed to feel
+/// instant: switching capture mode, opening the Lab or Settings, changing
+/// flash, flipping the camera, and the shutter itself.
+///
+/// Each measurement runs from the tap to the moment the app state the tap
+/// asked for actually arrives, which for camera work is a round trip through
+/// the session queue. Samples live in memory only and are shown in Settings,
+/// so the numbers can be read on the device instead of only in Instruments.
+/// This lives here rather than in its own file because the project has no
+/// synchronized groups, and a new file would mean editing the Xcode project.
+@MainActor
+final class PerformanceLog: ObservableObject {
+  static let shared = PerformanceLog()
+
+  struct Sample: Identifiable, Hashable {
+    let id = UUID()
+    let name: String
+    let milliseconds: Double
+    let recordedAt: Date
+  }
+
+  struct Summary: Identifiable, Hashable {
+    var id: String { name }
+    let name: String
+    let count: Int
+    let median: Double
+    let worst: Double
+  }
+
+  /// Enough history to see a pattern, small enough to stay free.
+  private static let capacity = 60
+
+  @Published private(set) var samples: [Sample] = []
+
+  /// A monotonic clock: durations must not move when the wall clock does.
+  private var pending: [String: DispatchTime] = [:]
+  private let logger = Logger(subsystem: "com.georgenijo.Aperture", category: "interaction")
+
+  /// Nothing the app measures should take this long. A measurement still
+  /// outstanding past it belongs to an interaction that quietly failed or
+  /// was a no-op, and letting it complete later would bill the next attempt
+  /// for all the idle time in between.
+  private static let staleAfter: TimeInterval = 10
+
+  private init() {}
+
+  /// Starting the same measurement twice keeps the earlier start, so a tap
+  /// that lands while the previous one is still settling reports the whole
+  /// wait rather than a flattering fraction of it.
+  func begin(_ name: String) {
+    guard pending[name] == nil else { return }
+    pending[name] = DispatchTime.now()
+  }
+
+  func end(_ name: String) {
+    guard let start = pending.removeValue(forKey: name) else { return }
+    let elapsed =
+      Double(DispatchTime.now().uptimeNanoseconds &- start.uptimeNanoseconds) / 1_000_000
+    guard elapsed < Self.staleAfter * 1000 else { return }
+    logger.debug("\(name, privacy: .public) \(elapsed, privacy: .public) ms")
+    samples.insert(Sample(name: name, milliseconds: elapsed, recordedAt: Date()), at: 0)
+    if samples.count > Self.capacity {
+      samples.removeLast(samples.count - Self.capacity)
+    }
+  }
+
+  /// A measurement whose completion can no longer arrive, such as a sheet
+  /// the user dismissed before it finished opening.
+  func cancel(_ name: String) {
+    pending.removeValue(forKey: name)
+  }
+
+  func clear() {
+    pending.removeAll()
+    samples.removeAll()
+  }
+
+  /// Median rather than mean: one thermal outlier should not hide the
+  /// latency the interaction usually has.
+  var summaries: [Summary] {
+    Dictionary(grouping: samples, by: \.name)
+      .map { name, group in
+        let sorted = group.map(\.milliseconds).sorted()
+        let median =
+          sorted.count.isMultiple(of: 2)
+          ? (sorted[sorted.count / 2 - 1] + sorted[sorted.count / 2]) / 2
+          : sorted[sorted.count / 2]
+        return Summary(
+          name: name, count: sorted.count, median: median, worst: sorted.last ?? 0)
+      }
+      .sorted { $0.name < $1.name }
   }
 }

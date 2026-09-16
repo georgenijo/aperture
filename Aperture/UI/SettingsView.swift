@@ -3,6 +3,7 @@ import SwiftUI
 struct SettingsView: View {
   @Binding var settings: AppSettings
   @Environment(\.dismiss) private var dismiss
+  @ObservedObject private var performance = PerformanceLog.shared
 
   var body: some View {
     NavigationStack {
@@ -113,6 +114,8 @@ struct SettingsView: View {
             .padding(.horizontal, 16)
             .padding(.bottom, 15)
           }
+
+          performanceGroup
 
           settingsGroup("Privacy", detail: "Your archive stays yours") {
             privacyRow("Processing stays on this iPhone", systemImage: "iphone.and.arrow.forward")
@@ -302,5 +305,70 @@ struct SettingsView: View {
     case .balanced: "A considered middle ground"
     case .maximum: "Largest, cleanest files"
     }
+  }
+}
+
+extension SettingsView {
+  /// How long the interactions actually take on this phone, measured from
+  /// the tap to the moment the app state the tap asked for arrives. Median
+  /// rather than mean, so a single thermal outlier does not hide the normal
+  /// latency. Timings are in memory only and reset when the app restarts.
+  @ViewBuilder
+  fileprivate var performanceGroup: some View {
+    settingsGroup("Timing", detail: "Measured on this iPhone, this session") {
+      if performance.summaries.isEmpty {
+        Text("Use the camera for a moment and the timings appear here.")
+          .font(.caption)
+          .foregroundStyle(ApertureStyle.muted)
+          .fixedSize(horizontal: false, vertical: true)
+          .padding(.horizontal, 16)
+          .padding(.vertical, 12)
+      } else {
+        ForEach(Array(performance.summaries.enumerated()), id: \.element.id) { index, summary in
+          if index > 0 { settingDivider() }
+          HStack(alignment: .firstTextBaseline) {
+            VStack(alignment: .leading, spacing: 2) {
+              Text(summary.name)
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(ApertureStyle.bone)
+              Text("\(summary.count) sample\(summary.count == 1 ? "" : "s")")
+                .font(.caption)
+                .foregroundStyle(ApertureStyle.muted)
+            }
+            Spacer(minLength: 12)
+            VStack(alignment: .trailing, spacing: 2) {
+              Text(Self.milliseconds(summary.median))
+                .font(.subheadline.weight(.semibold))
+                .monospacedDigit()
+                .foregroundStyle(ApertureStyle.amber)
+              Text("worst \(Self.milliseconds(summary.worst))")
+                .font(.caption)
+                .monospacedDigit()
+                .foregroundStyle(ApertureStyle.muted)
+            }
+          }
+          .padding(.horizontal, 16)
+          .padding(.vertical, 12)
+          .accessibilityElement(children: .combine)
+          .accessibilityLabel(summary.name)
+          .accessibilityValue(
+            "median \(Self.milliseconds(summary.median)), worst \(Self.milliseconds(summary.worst)), \(summary.count) samples"
+          )
+        }
+        settingDivider()
+        Button("Reset timings") { performance.clear() }
+          .font(.subheadline.weight(.medium))
+          .foregroundStyle(ApertureStyle.amber)
+          .padding(.horizontal, 16)
+          .padding(.vertical, 12)
+          .accessibilityIdentifier("settings-reset-timings")
+      }
+    }
+  }
+
+  fileprivate static func milliseconds(_ value: Double) -> String {
+    value >= 1000
+      ? String(format: "%.2f s", value / 1000)
+      : String(format: "%.0f ms", value)
   }
 }

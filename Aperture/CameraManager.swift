@@ -42,6 +42,9 @@ final class CameraManager: NSObject, ObservableObject, @unchecked Sendable {
   var readinessCoordinator: AVCapturePhotoOutputReadinessCoordinator?
   var readinessDelegate: ReadinessDelegate?
   var captureRequests: [Int64: CaptureRequest] = [:]
+  /// Captures that left the device on one-shot focus. Only the last one to
+  /// finish hands the preview back to continuous mode.
+  var convergedRequestsInFlight = 0
   var requestedFlashMode: CameraFlashMode = .auto
   var sessionStartRequested = false
   var notificationTokens: [NSObjectProtocol] = []
@@ -136,12 +139,11 @@ final class CameraManager: NSObject, ObservableObject, @unchecked Sendable {
     session.startRunning()
     sessionStartRequested = false
     let isRunning = session.isRunning
-    let isReady = captureReadinessIsReady
     publish {
       $0.lifecycleState = isRunning ? .ready : .failed
-      $0.isCaptureReady = isReady
       if isRunning { $0.issue = nil }
     }
+    publishReadinessOnQueue()
     logger.debug("camera session started")
   }
 
@@ -161,10 +163,8 @@ final class CameraManager: NSObject, ObservableObject, @unchecked Sendable {
       }
       guard self.session.isRunning else { return }
       self.session.stopRunning()
-      self.publish {
-        $0.lifecycleState = .idle
-        $0.isCaptureReady = false
-      }
+      self.publish { $0.lifecycleState = .idle }
+      self.publishReadinessOnQueue()
       self.logger.debug("camera session stopped")
     }
   }
@@ -269,6 +269,32 @@ final class CameraManager: NSObject, ObservableObject, @unchecked Sendable {
     logger.error("\(title, privacy: .public): \(message, privacy: .public)")
   }
 
+  /// The only place `isCaptureReady` is ever written.
+  ///
+  /// Readiness had several independent writers: the photo output's readiness
+  /// coordinator (whose delegate arrives on the main queue and only fires on
+  /// a *change*), session start, capture completion, and each capture-mode
+  /// switch. Each published a value it had captured earlier, so a stale
+  /// `false` could land after a live `true` and never be corrected, leaving
+  /// the shutter disabled with no event left to fix it.
+  ///
+  /// Every writer now funnels through here on the camera queue, which both
+  /// orders the writes and reads the truth at the moment of publishing
+  /// rather than from a snapshot taken earlier. Photo mode asks the
+  /// coordinator; video mode only needs a running session.
+  func publishReadinessOnQueue() {
+    dispatchPrecondition(condition: .onQueue(sessionQueue))
+    let ready: Bool
+    if !session.isRunning || currentInput == nil {
+      ready = false
+    } else if sessionCaptureMode == .video {
+      ready = true
+    } else {
+      ready = captureReadinessIsReady
+    }
+    publish { $0.isCaptureReady = ready }
+  }
+
   func publish(_ update: @escaping @Sendable (CameraManager) -> Void) {
     if Thread.isMainThread {
       update(self)
@@ -283,10 +309,8 @@ final class CameraManager: NSObject, ObservableObject, @unchecked Sendable {
     captureMode = mode
     issue = nil
   }
-  func publishVideoReadiness(_ ready: Bool) { isCaptureReady = ready }
   func publishVideoStopped() {
     lifecycleState = .idle
-    isCaptureReady = false
   }
   func publishRecordingStarted() {
     isRecording = true

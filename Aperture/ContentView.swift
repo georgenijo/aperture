@@ -1,4 +1,5 @@
 import AVFoundation
+import AVKit
 import SwiftUI
 import UIKit
 
@@ -36,6 +37,27 @@ struct ContentView: View {
       }
     }
     .preferredColorScheme(.dark)
+    // Volume buttons, the Camera Control on the newer phones, and AirPods
+    // stem clicks all arrive here. Apple's guidance is to fire on release,
+    // not on press, so a half press that slides to adjust does not shoot.
+    .modifier(HardwareShutter(isEnabled: shutterIsReady && !showLab && !showSettings) {
+      captureAction()
+    })
+    .onChange(of: model.captureMode) { previous, mode in
+      guard previous != mode else { return }
+      PerformanceLog.shared.end("Switch to \(mode.label)")
+    }
+    .onChange(of: model.cameraManager.currentPosition) { _, _ in
+      PerformanceLog.shared.end("Flip camera")
+    }
+    .onChange(of: displayFlashMode) { _, _ in
+      PerformanceLog.shared.end("Change flash")
+    }
+    .onChange(of: model.cameraManager.isCapturing) { wasCapturing, isCapturing in
+      // Ends on the capture itself finishing rather than on a new library
+      // item, which can also arrive from an import or a re-development.
+      if wasCapturing && !isCapturing { PerformanceLog.shared.end("Shutter") }
+    }
     .task { await model.prepare() }
     .onAppear { model.activateCamera() }
     .onDisappear { model.deactivateCamera() }
@@ -69,7 +91,16 @@ struct ContentView: View {
       UIAccessibility.post(
         notification: .announcement, argument: "\(issue.title). \(issue.message)")
     }
-    .fullScreenCover(isPresented: $showLab) { LabView(model: model) }
+    .fullScreenCover(isPresented: $showLab) {
+      LabView(model: model)
+        .onAppear { PerformanceLog.shared.end("Open Lab") }
+    }
+    .sheet(isPresented: $showSettings, onDismiss: { PerformanceLog.shared.cancel("Open Settings") }) {
+      SettingsView(
+        settings: Binding(get: { model.settings }, set: { model.updateSettings($0) })
+      )
+      .onAppear { PerformanceLog.shared.end("Open Settings") }
+    }
     .sheet(isPresented: $showFilmPicker) {
       FilmPickerView(
         selectedFilm: Binding(
@@ -80,11 +111,6 @@ struct ContentView: View {
             model.updateSettings(settings)
           }
         )
-      )
-    }
-    .sheet(isPresented: $showSettings) {
-      SettingsView(
-        settings: Binding(get: { model.settings }, set: { model.updateSettings($0) })
       )
     }
     .alert("Aperture", isPresented: errorBinding) {
@@ -245,8 +271,8 @@ struct ContentView: View {
         filmButton
         Spacer(minLength: 4)
         if isFullScreenViewfinder { lensRail }
-        controlBar(stacked: true)
         shutterRow
+        controlBar(stacked: true)
       }
       .apertureGlassGroup()
       .cameraControlLegibility(isFullScreenViewfinder)
@@ -332,7 +358,13 @@ struct ContentView: View {
       .accessibilityHint("Choose flash mode")
       .confirmationDialog("Flash", isPresented: $showFlashMenu, titleVisibility: .visible) {
         ForEach(flashOptions, id: \.self) { mode in
-          Button(mode.label) { model.setFlash(mode) }
+          Button(mode.label) {
+            // Choosing the mode that is already active publishes nothing.
+            guard mode != displayFlashMode else { return }
+            PerformanceLog.shared.begin("Change flash")
+            model.setFlash(mode)
+            scheduleTimingCancel("Change flash")
+          }
         }
       }
     } else {
@@ -368,7 +400,9 @@ struct ContentView: View {
 
   private var switchCameraButton: some View {
     Button {
+      PerformanceLog.shared.begin("Flip camera")
       model.switchCamera()
+      scheduleTimingCancel("Flip camera")
     } label: {
       Image(systemName: "arrow.triangle.2.circlepath.camera")
     }
@@ -379,6 +413,7 @@ struct ContentView: View {
 
   private var settingsButton: some View {
     Button {
+      PerformanceLog.shared.begin("Open Settings")
       showSettings = true
     } label: {
       Image(systemName: "gearshape")
@@ -402,8 +437,8 @@ struct ContentView: View {
   private var bottomBar: some View {
     VStack(spacing: 12) {
       if isFullScreenViewfinder { lensRail }
-      controlBar(stacked: false)
       shutterRow
+      controlBar(stacked: false)
     }
     .padding(.horizontal, 22)
     .padding(.top, 8)
@@ -490,7 +525,11 @@ struct ContentView: View {
           // the camera queue and published back later, so that transaction
           // would be long finished. The animation is keyed to the published
           // value at the end of this view instead.
+          PerformanceLog.shared.begin("Switch to \(mode.label)")
           model.setCaptureMode(mode)
+          // A refused switch never publishes, so give it a deadline of its
+          // own rather than letting the next attempt inherit the start.
+          scheduleTimingCancel("Switch to \(mode.label)")
         } label: {
           Text(mode.label.uppercased())
             .font(.system(.caption, design: .rounded).weight(.bold))
@@ -531,6 +570,7 @@ struct ContentView: View {
 
   private var labButton: some View {
     Button {
+      PerformanceLog.shared.begin("Open Lab")
       showLab = true
     } label: {
       ZStack(alignment: .topTrailing) {
@@ -698,6 +738,16 @@ struct ContentView: View {
     model.isRecording || model.cameraManager.isCaptureReady
   }
 
+  /// Interactions that are refused by the camera publish nothing, so their
+  /// measurement would sit open and be charged to the next attempt. Give
+  /// each one a short deadline after which it is simply dropped.
+  private func scheduleTimingCancel(_ name: String) {
+    Task { @MainActor in
+      try? await Task.sleep(nanoseconds: 4_000_000_000)
+      PerformanceLog.shared.cancel(name)
+    }
+  }
+
   private var shutterAccessibilityValue: String {
     if model.isRecording { return formattedDuration }
     if !shutterIsReady { return "Camera preparing" }
@@ -733,6 +783,10 @@ struct ContentView: View {
       feedback.prepare()
       feedback.impactOccurred()
     }
+    // Runs from the tap until the capture itself reports finished, which is
+    // what the flash convergence wait shows up in.
+    PerformanceLog.shared.begin("Shutter")
+    scheduleTimingCancel("Shutter")
     let needsScreenFlash =
       model.cameraManager.currentPosition == .front
       && model.cameraManager.flashMode == .on
@@ -757,5 +811,28 @@ struct ContentView: View {
   private func openSystemSettings() {
     guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
     UIApplication.shared.open(url)
+  }
+}
+
+/// Routes the phone's physical capture buttons to the shutter.
+///
+/// The SwiftUI modifier arrived in iOS 18; the project still targets 17, so
+/// this wraps it rather than applying it inline. On earlier systems the
+/// hardware buttons keep their system behaviour and the on-screen shutter is
+/// the only way to capture.
+private struct HardwareShutter: ViewModifier {
+  let isEnabled: Bool
+  let capture: () -> Void
+
+  func body(content: Content) -> some View {
+    if #available(iOS 18.0, *) {
+      content.onCameraCaptureEvent(isEnabled: isEnabled) { event in
+        // Release, not press: a half press on the Camera Control is the
+        // gesture that adjusts rather than shoots.
+        if event.phase == .ended { capture() }
+      }
+    } else {
+      content
+    }
   }
 }
