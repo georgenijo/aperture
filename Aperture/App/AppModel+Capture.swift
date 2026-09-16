@@ -269,8 +269,7 @@ extension AppModel {
         try await develop(
           item: migratedItem,
           sourceData: sourceData,
-          autoSaveToPhotos: false,
-          showCompletionNotice: false
+          autoSaveToPhotos: false
         )
         migratedCount += 1
       } catch {
@@ -287,15 +286,14 @@ extension AppModel {
     if migratedCount > 0 {
       notice = migratedCount == 1
         ? "Updated the photo timestamp."
-        : "Updated (migratedCount) photo timestamps."
+        : "Updated \(migratedCount) photo timestamps."
     }
   }
 
   private func develop(
     item: MediaItem,
     sourceData: Data,
-    autoSaveToPhotos: Bool? = nil,
-    showCompletionNotice: Bool = true
+    autoSaveToPhotos: Bool? = nil
   ) async throws {
     let encoded = try await Task.detached(priority: .userInitiated) {
       let image = try FilmProcessor.shared.process(sourceData, recipe: item.recipe)
@@ -324,13 +322,11 @@ extension AppModel {
         try await photosExporter.export([
           PhotosExportAsset(url: url, mediaType: .photo, capturedAt: item.capturedAt)
         ])
-        notice = "Developed and saved to Photos."
       } catch {
         // The local item is already safe; auto-save is intentionally add-only.
+        // Only the failure is worth interrupting the viewfinder for.
         notice = "Developed locally. Photos could not be updated."
       }
-    } else if showCompletionNotice {
-      notice = "Developed."
     }
   }
 
@@ -340,16 +336,11 @@ extension AppModel {
         throw MediaLibraryError.fileOperation(
           operation: "read", path: item.id.uuidString, details: "The source movie is missing.")
       }
+      // The Lab thumbnail's spinner already shows that development is running,
+      // so the processor has nothing to report back to the viewfinder.
       let outputURL = try await VideoProcessor.shared.process(
         sourceURL: sourceURL, recipe: item.recipe
-      ) { [weak self] update in
-        guard let self else { return }
-        Task { @MainActor in
-          // Keep the UI responsive without making progress a source
-          // of rapid SwiftUI invalidations.
-          if update.fraction >= 1 { self.notice = "Finishing video…" }
-        }
-      }
+      )
       defer { try? FileManager.default.removeItem(at: outputURL) }
       let processed = MediaAssetPayload(fileURL: outputURL, fileExtension: outputURL.pathExtension)
       let updatedItem = try await mediaLibrary.replaceProcessedAsset(
@@ -368,12 +359,9 @@ extension AppModel {
           try await photosExporter.export([
             PhotosExportAsset(url: url, mediaType: .video, capturedAt: item.capturedAt)
           ])
-          notice = "Developed and saved to Photos."
         } catch {
           notice = "Developed locally. Photos could not be updated."
         }
-      } else {
-        notice = "Developed video."
       }
     } catch {
       processingIDs.remove(item.id)

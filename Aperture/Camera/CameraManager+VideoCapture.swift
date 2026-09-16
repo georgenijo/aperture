@@ -48,10 +48,8 @@ extension CameraManager {
         return
       }
       sessionCaptureMode = mode
-      publish {
-        $0.publishVideoMode(mode)
-        $0.publishVideoReadiness($0.lifecycleState == .ready)
-      }
+      publish { $0.publishVideoMode(mode) }
+      publishReadinessOnQueue()
       requestMicrophonePermission()
     } else {
       session.beginConfiguration()
@@ -59,12 +57,12 @@ extension CameraManager {
       if session.canSetSessionPreset(.photo) { session.sessionPreset = .photo }
       session.commitConfiguration()
       sessionCaptureMode = mode
-      publish {
-        $0.publishVideoMode(mode)
-        $0.publishVideoReadiness($0.lifecycleState == .ready)
-      }
+      publish { $0.publishVideoMode(mode) }
+      publishReadinessOnQueue()
     }
   }
+
+
 
   func configureVideoGraphOnQueue() {
     guard sessionCaptureMode == .video, currentInput != nil else { return }
@@ -79,10 +77,8 @@ extension CameraManager {
       if session.canSetSessionPreset(.photo) { session.sessionPreset = .photo }
       session.commitConfiguration()
       sessionCaptureMode = .photo
-      publish {
-        $0.publishVideoMode(.photo)
-        $0.publishVideoReadiness($0.lifecycleState == .ready)
-      }
+      publish { $0.publishVideoMode(.photo) }
+      publishReadinessOnQueue()
     }
   }
 
@@ -348,6 +344,7 @@ extension CameraManager {
       if shouldStopSession, session.isRunning {
         session.stopRunning()
         publish { $0.publishVideoStopped() }
+        publishReadinessOnQueue()
       }
       if shouldRebuild {
         rebuildAfterRecordingFinishes = false

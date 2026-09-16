@@ -394,10 +394,8 @@ extension CameraManager {
             recoverySuggestion: "Pause briefly before recording again."))
       } else {
         if session.isRunning { session.stopRunning() }
-        publish {
-          $0.lifecycleState = .idle
-          $0.isCaptureReady = false
-        }
+        publish { $0.lifecycleState = .idle }
+        publishReadinessOnQueue()
       }
     }
   }

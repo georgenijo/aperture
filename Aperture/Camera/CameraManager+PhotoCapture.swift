@@ -14,6 +14,12 @@ extension CameraManager {
         photoOutput.isFastCapturePrioritizationEnabled = true
       }
     }
+    // Scene monitoring is what makes `isFlashScene` meaningful. Without a
+    // settings object to monitor, that property never becomes true and the
+    // dark-scene convergence below could never trigger.
+    let monitoring = AVCapturePhotoSettings()
+    monitoring.flashMode = photoOutput.supportedFlashModes.contains(.auto) ? .auto : .off
+    photoOutput.photoSettingsForSceneMonitoring = monitoring
     let supportedDimensions = device.activeFormat.supportedMaxPhotoDimensions
     if let largest = supportedDimensions.max(by: { $0.width * $0.height < $1.width * $1.height }) {
       photoOutput.maxPhotoDimensions = largest
@@ -22,15 +28,18 @@ extension CameraManager {
 
   func installReadinessCoordinatorOnQueue() {
     guard #available(iOS 17.0, *) else { return }
-    let delegate = ReadinessDelegate { [weak self] readiness in
-      self?.publish { $0.isCaptureReady = readiness == .ready }
+    // The delegate arrives on the main queue. Rather than publish from
+    // there, hop to the camera queue so this write is ordered against every
+    // other readiness write instead of racing them.
+    let delegate = ReadinessDelegate { [weak self] _ in
+      guard let self else { return }
+      self.sessionQueue.async { [weak self] in self?.publishReadinessOnQueue() }
     }
     let coordinator = AVCapturePhotoOutputReadinessCoordinator(photoOutput: photoOutput)
     coordinator.delegate = delegate
     readinessDelegate = delegate
     readinessCoordinator = coordinator
-    let isReady = coordinator.captureReadiness == .ready
-    publish { $0.isCaptureReady = isReady }
+    publishReadinessOnQueue()
   }
 
   var captureReadinessIsReady: Bool {
@@ -118,6 +127,31 @@ extension CameraManager {
       coordinator.startTrackingCaptureRequest(using: settings)
     }
     publish { $0.isCapturing = true }
+    // Convergence runs only after the capture has been admitted and the
+    // coordinator is tracking it. Readiness therefore already reads as busy,
+    // so a second tap during the wait is rejected instead of queueing
+    // another convergence behind this one.
+    if converge(device: device) {
+      request.restoreContinuousFocus = true
+      convergedRequestsInFlight += 1
+    }
+    guard session.isRunning else {
+      // The session stopped while the lens was travelling. Abandon the
+      // capture rather than shooting into a torn-down graph, and give the
+      // device back before leaving.
+      captureRequests.removeValue(forKey: settings.uniqueID)
+      if request.restoreContinuousFocus {
+        convergedRequestsInFlight = max(0, convergedRequestsInFlight - 1)
+        if convergedRequestsInFlight == 0 { resetToContinuousOnQueue() }
+      }
+      finishImmediately(
+        .failure(
+          CameraIssue(
+            kind: .capture, title: "Capture cancelled",
+            message: "The camera stopped before the photograph was taken.",
+            recoverySuggestion: "Try again in a moment.")), completion: completion)
+      return
+    }
     photoOutput.capturePhoto(with: settings, delegate: request.delegate)
     logger.debug("photo capture requested \(settings.uniqueID, privacy: .public)")
   }
@@ -222,15 +256,76 @@ extension CameraManager {
       return
     }
     request.finished = true
-    let isCapturing = !captureRequests.isEmpty
-    let isReady = captureReadinessIsReady
-    publish {
-      $0.isCapturing = isCapturing
-      $0.isCaptureReady = isReady
+    // A converged shot leaves focus and exposure locked. Only the last one
+    // still outstanding hands the preview back, so an earlier photo
+    // finishing cannot unlock the device out from under a newer one.
+    if request.restoreContinuousFocus {
+      convergedRequestsInFlight = max(0, convergedRequestsInFlight - 1)
+      if convergedRequestsInFlight == 0 { resetToContinuousOnQueue() }
     }
+    let isCapturing = !captureRequests.isEmpty
+    publish { $0.isCapturing = isCapturing }
+    publishReadinessOnQueue()
     let callback = request.completion ?? onPhotoCaptured
     DispatchQueue.main.async { callback?(result) }
   }
+
+  /// In a dark room continuous autofocus has nothing to lock onto, so the
+  /// shutter fires on whatever the lens happened to be set to and the flash
+  /// lights a blurred frame. Before a flash capture in those conditions, run
+  /// a one-shot focus and exposure pass at the centre and give it a moment
+  /// to settle.
+  ///
+  /// The wait is bounded and the whole thing is skipped in decent light, so
+  /// an ordinary daylight shot is as immediate as it was. Returns whether
+  /// the device was left locked and therefore needs restoring afterwards.
+  func converge(device: AVCaptureDevice) -> Bool {
+    guard requestedFlashMode != .off, device.hasFlash else { return false }
+    guard device.isFocusModeSupported(.autoFocus) else { return false }
+    // `isFlashScene` is the system's own judgement about whether this frame
+    // needs the flash, which is a far better signal than reading ISO and
+    // guessing. It is only meaningful because scene monitoring is configured
+    // when the output is set up.
+    guard photoOutput.isFlashScene else { return false }
+    // A tap-to-focus is an explicit instruction about what matters in the
+    // frame. Only take the lens over when it is still on automatic.
+    guard device.focusMode == .continuousAutoFocus else { return false }
+
+    let centre = CGPoint(x: 0.5, y: 0.5)
+    do {
+      try device.lockForConfiguration()
+      if device.isFocusPointOfInterestSupported { device.focusPointOfInterest = centre }
+      device.focusMode = .autoFocus
+      if device.isExposurePointOfInterestSupported { device.exposurePointOfInterest = centre }
+      if device.isExposureModeSupported(.autoExpose) { device.exposureMode = .autoExpose }
+      device.unlockForConfiguration()
+    } catch {
+      return false
+    }
+
+    // Two phases. The lens does not begin moving the instant the mode is
+    // set, so waiting only for "not adjusting" would sail straight past a
+    // scan that had not started yet. Wait briefly for it to begin, then for
+    // it to settle. Both waits are bounded, and a stopped session breaks out
+    // immediately, so the camera queue is never held for long.
+    let started = CFAbsoluteTimeGetCurrent() + Self.convergenceStartCeiling
+    while !device.isAdjustingFocus && !device.isAdjustingExposure {
+      guard CFAbsoluteTimeGetCurrent() < started, session.isRunning else { break }
+      Thread.sleep(forTimeInterval: 0.01)
+    }
+    let deadline = CFAbsoluteTimeGetCurrent() + Self.convergenceCeiling
+    while device.isAdjustingFocus || device.isAdjustingExposure {
+      guard CFAbsoluteTimeGetCurrent() < deadline, session.isRunning else { break }
+      Thread.sleep(forTimeInterval: 0.015)
+    }
+    return true
+  }
+
+  /// Long enough for a lens to travel in the dark, short enough that the
+  /// delay reads as the camera working rather than the app hanging.
+  static var convergenceCeiling: TimeInterval { 0.45 }
+  /// Just enough for the scan to get going before the settle wait begins.
+  static var convergenceStartCeiling: TimeInterval { 0.08 }
 
   func captureIssue(_ error: Error) -> CameraIssue {
     CameraIssue(
@@ -243,6 +338,7 @@ extension CameraManager {
     let completion: (@Sendable (Result<CapturedPhoto, CameraIssue>) -> Void)?
     let delegate: CaptureDelegate
     var flashFired = false
+    var restoreContinuousFocus = false
     var dimensions = CMVideoDimensions(width: 0, height: 0)
     var processedData: Data?
     var processingIssue: CameraIssue?
