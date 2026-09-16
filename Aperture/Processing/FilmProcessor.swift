@@ -250,6 +250,9 @@ final class FilmProcessor: @unchecked Sendable {
     let decision = FilmProcessingDecision.make(for: recipe)
 
     var image = sized.cropped(to: bounds)
+    // The seeded leak decision is made once per recipe, so only the first
+    // light-leak stage draws it; repeated leak stages are ignored.
+    var leakApplied = false
     for stage in recipe.stages {
       switch stage {
       case .colorGrade(let grade):
@@ -264,7 +267,8 @@ final class FilmProcessor: @unchecked Sendable {
       case .grain(let grainStage):
         image = applyGrain(image, stage: grainStage, seed: decision.grainSeed, extent: bounds)
       case .lightLeak(let leakStage):
-        if let leak = decision.leak {
+        if let leak = decision.leak, !leakApplied {
+          leakApplied = true
           image = applyLightLeak(
             image, decision: leak, strength: leakStage.strength, extent: bounds)
         }
