@@ -1,0 +1,75 @@
+name: iOS
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-and-test:
+    runs-on: macos-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Select an available iPhone simulator
+        id: simulator
+        shell: bash
+        run: |
+          set -euo pipefail
+          simulator_json="$(mktemp -t aperture-simulators.XXXXXX.json)"
+          trap 'rm -f "$simulator_json"' EXIT
+          xcrun simctl list devices available -j > "$simulator_json"
+          destination="$(python3 - "$simulator_json" <<'PY'
+          import json
+          import re
+          import sys
+
+          with open(sys.argv[1], encoding="utf-8") as handle:
+              devices = json.load(handle).get("devices", {})
+          candidates = []
+          for runtime, entries in devices.items():
+              if "com.apple.CoreSimulator.SimRuntime.iOS-" not in runtime:
+                  continue
+              match = re.search(r"iOS-(\d+)-(\d+)(?:-(\d+))?", runtime)
+              version = tuple(int(part or 0) for part in match.groups()) if match else (0, 0, 0)
+              if version < (17, 0, 0):
+                  continue
+              for device in entries:
+                  if device.get("isAvailable") and device.get("name", "").startswith("iPhone"):
+                      candidates.append((version, device["name"], device["udid"]))
+
+          if not candidates:
+              raise SystemExit("No available iPhone simulator running iOS 17 or later was found")
+          _, name, udid = max(candidates)
+          print(f"platform=iOS Simulator,id={udid}")
+          PY
+          )"
+          echo "destination=$destination" >> "$GITHUB_OUTPUT"
+          echo "Using $destination"
+
+      - name: Build unsigned
+        run: >-
+          xcodebuild
+          -project Aperture.xcodeproj
+          -scheme Aperture
+          -configuration Debug
+          -sdk iphonesimulator
+          -destination '${{ steps.simulator.outputs.destination }}'
+          CODE_SIGNING_ALLOWED=NO
+          CODE_SIGNING_REQUIRED=NO
+          build
+
+      - name: Run unit and UI tests
+        run: >-
+          xcodebuild
+          -project Aperture.xcodeproj
+          -scheme Aperture
+          -configuration Debug
+          -sdk iphonesimulator
+          -destination '${{ steps.simulator.outputs.destination }}'
+          CODE_SIGNING_ALLOWED=NO
+          CODE_SIGNING_REQUIRED=NO
+          -parallel-testing-enabled NO
+          test
