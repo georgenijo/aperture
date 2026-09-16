@@ -15,6 +15,14 @@ struct ContentView: View {
   @State private var focusToken = UUID()
   @State private var showFlash = false
   @State private var recordingFeedback = UIImpactFeedbackGenerator(style: .medium)
+  /// Lets the selected-mode pill slide between the words instead of blinking
+  /// out of one and into the other.
+  @Namespace private var chrome
+  /// The control row and film chip grow with Dynamic Type, so the space the
+  /// layout reserves for them has to grow too. Pinned numbers would clip the
+  /// labels at accessibility sizes.
+  @ScaledMetric(relativeTo: .caption) private var controlRowHeight: CGFloat = 58
+  @ScaledMetric(relativeTo: .caption) private var chipHeight: CGFloat = 44
 
   var body: some View {
     ZStack {
@@ -110,7 +118,7 @@ struct ContentView: View {
             retry: { model.retryCameraIssue() },
             dismiss: { model.dismissCameraIssue() }
           )
-          .padding(.top, proxy.safeAreaInsets.top + (isLandscape ? 8 : Layout.portraitTopReserve))
+          .padding(.top, proxy.safeAreaInsets.top + (isLandscape ? 8 : portraitTopReserve))
           .padding(.horizontal, 16)
           .transition(reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity))
         }
@@ -122,13 +130,23 @@ struct ContentView: View {
   }
 
   private enum Layout {
-    /// One row of 44pt controls, the gap that keeps them clear of the status
-    /// bar, and a little air above the image. In photo mode the 4:3 preview
-    /// is width-bound, so trimming this does not enlarge it; full-screen mode
-    /// is what actually grows the image.
-    static let portraitTopReserve: CGFloat = 60
-    /// Mode strip, shutter row, and their spacing below the image.
-    static let portraitBottomReserve: CGFloat = 156
+    /// The gap that keeps the film chip clear of the status bar, and the air
+    /// below it. In photo mode the 4:3 preview is width-bound, so trimming
+    /// this does not enlarge the image; full-screen mode is what does.
+    static let chipTopPadding: CGFloat = 10
+    static let chipBottomAir: CGFloat = 6
+    static let shutterHeight: CGFloat = 84
+    static let stackTopPadding: CGFloat = 8
+    static let stackSpacing: CGFloat = 12
+  }
+
+  /// Measured rather than guessed, so both reserves track Dynamic Type.
+  private var portraitTopReserve: CGFloat {
+    Layout.chipTopPadding + chipHeight + Layout.chipBottomAir
+  }
+
+  private var portraitBottomReserve: CGFloat {
+    Layout.stackTopPadding + controlRowHeight + Layout.stackSpacing + Layout.shutterHeight
   }
 
   /// Edge-to-edge preview with the controls floating over it, rather than an
@@ -159,8 +177,8 @@ struct ContentView: View {
       ? max(1, proxy.size.height - safeTop - safeBottom)
       : max(
         1,
-        proxy.size.height - safeTop - safeBottom - Layout.portraitTopReserve
-          - Layout.portraitBottomReserve)
+        proxy.size.height - safeTop - safeBottom - portraitTopReserve
+          - portraitBottomReserve)
     let orientedPreviewAspectRatio = isLandscape ? previewAspectRatio : 1 / previewAspectRatio
     let framedWidth = min(availableWidth, availableHeight * orientedPreviewAspectRatio)
     // The preview layer already fills by aspect, so a full-screen frame crops
@@ -176,7 +194,7 @@ struct ContentView: View {
     } else if isLandscape {
       previewCenterY = safeTop + (availableHeight / 2)
     } else {
-      previewCenterY = safeTop + Layout.portraitTopReserve + (previewHeight / 2)
+      previewCenterY = safeTop + portraitTopReserve + (previewHeight / 2)
     }
 
     return ZStack(alignment: .topLeading) {
@@ -188,13 +206,18 @@ struct ContentView: View {
         viewfinder
           .ignoresSafeArea()
       } else {
+        // Photo is 4:3 and video is 16:9, so switching modes changes the
+        // frame. Animating it means the image reshapes in place rather than
+        // snapping to a different size.
         viewfinder
           .frame(width: previewWidth, height: previewHeight)
+          .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
           .overlay(alignment: .bottom) {
             lensRail
               .padding(.bottom, 10)
           }
           .position(x: previewCenterX, y: previewCenterY)
+          .animation(ApertureMotion.morph(reduceMotion), value: model.captureMode)
       }
 
       cameraChrome(
@@ -219,17 +242,13 @@ struct ContentView: View {
   ) -> some View {
     if isLandscape {
       VStack(spacing: 12) {
-        HStack(spacing: 0) {
-          flashButton
-          Spacer(minLength: 0)
-          settingsButton
-        }
         filmButton
         Spacer(minLength: 4)
         if isFullScreenViewfinder { lensRail }
-        modeRow
+        controlBar(stacked: true)
         shutterRow
       }
+      .apertureGlassGroup()
       .cameraControlLegibility(isFullScreenViewfinder)
       .padding(.horizontal, 12)
       .padding(.top, safeTop + 8)
@@ -283,21 +302,13 @@ struct ContentView: View {
     .accessibilityHint("Double tap to focus at the center")
   }
 
-  /// Flash on the left, film in the middle, settings on the right. The film
-  /// chip is the only text above the image, so it stays small and bare.
+  /// Nothing above the image but the film it is being shot on. Flash and
+  /// settings moved down into the thumb's reach, which also leaves the top
+  /// corners free of targets that fight the status bar.
   private var topBar: some View {
-    ZStack {
-      HStack(spacing: 0) {
-        flashButton
-        Spacer(minLength: 0)
-        settingsButton
-      }
-      filmButton
-    }
-    .padding(.horizontal, 12)
-    // The status bar sits directly above this row, so the controls need a
-    // gap they can be tapped in rather than a hairline.
-    .padding(.top, 10)
+    filmButton
+      .padding(.horizontal, 12)
+      .padding(.top, Layout.chipTopPadding)
   }
 
   @ViewBuilder
@@ -309,8 +320,13 @@ struct ContentView: View {
         Image(systemName: displayFlashMode.systemImage)
           .foregroundStyle(
             displayFlashMode == .off ? ApertureStyle.bone : ApertureStyle.amber)
+          // The bolt redraws through its own glyph rather than cross-fading.
+          // A nil transaction animation does not stop a symbol effect, so
+          // Reduce Motion has to opt out of the transition itself.
+          .contentTransition(reduceMotion ? .identity : .symbolEffect(.replace))
       }
       .buttonStyle(ApertureBareIconButtonStyle())
+      .animation(ApertureMotion.snap(reduceMotion), value: displayFlashMode)
       .accessibilityLabel("Flash")
       .accessibilityValue(displayFlashMode.label)
       .accessibilityHint("Choose flash mode")
@@ -328,7 +344,7 @@ struct ContentView: View {
     Button {
       showFilmPicker = true
     } label: {
-      HStack(spacing: 6) {
+      HStack(spacing: 7) {
         Circle()
           .fill(ApertureStyle.accent(for: model.settings.selectedFilm))
           .frame(width: 6, height: 6)
@@ -338,11 +354,13 @@ struct ContentView: View {
           .lineLimit(1)
       }
       .foregroundStyle(ApertureStyle.bone)
-      .padding(.horizontal, 12)
+      .padding(.horizontal, 14)
       .frame(minHeight: ApertureStyle.bareControlSize)
-      .contentShape(Rectangle())
+      .apertureGlassCapsule()
+      .contentShape(Capsule())
     }
     .buttonStyle(.plain)
+    .animation(ApertureMotion.snap(reduceMotion), value: model.settings.selectedFilm)
     .accessibilityLabel("Film")
     .accessibilityValue(selectedFilmName)
     .accessibilityHint("Choose a film recipe")
@@ -382,54 +400,112 @@ struct ContentView: View {
   }
 
   private var bottomBar: some View {
-    VStack(spacing: 10) {
+    VStack(spacing: 12) {
       if isFullScreenViewfinder { lensRail }
-      modeRow
+      controlBar(stacked: false)
       shutterRow
     }
-    .padding(.horizontal, 28)
+    .padding(.horizontal, 22)
     .padding(.top, 8)
+    .apertureGlassGroup()
   }
 
-  /// The row above the shutter: the mode words normally, the elapsed time
-  /// while recording. Both occupy the same 44pt slot, so the timer never
-  /// has to float over the shutter or steal space from the mode labels.
+  /// Flash, capture mode, and settings together, low enough to reach with a
+  /// thumb. While recording the middle becomes the elapsed time, so the timer
+  /// occupies space the layout already had.
+  ///
+  /// The landscape dock is only ~220pt wide. Two 44pt icons and the mode
+  /// words cannot share one line there without truncating, so that layout
+  /// stacks the icons above the words instead of squeezing them.
   @ViewBuilder
-  private var modeRow: some View {
+  private func controlBar(stacked: Bool) -> some View {
+    let core = Group {
+      if stacked {
+        VStack(spacing: 2) {
+          HStack(spacing: 0) {
+            flashButton
+            Spacer(minLength: 0)
+            settingsButton
+          }
+          controlBarCenter
+        }
+      } else {
+        HStack(spacing: 0) {
+          flashButton
+          Spacer(minLength: 0)
+          controlBarCenter
+          Spacer(minLength: 0)
+          settingsButton
+        }
+      }
+    }
+
+    core
+      .padding(.horizontal, 8)
+      .frame(minHeight: stacked ? nil : controlRowHeight)
+      .padding(.vertical, stacked ? 6 : 0)
+      .apertureGlassCapsule()
+      .animation(ApertureMotion.morph(reduceMotion), value: model.isRecording)
+  }
+
+  @ViewBuilder
+  private var controlBarCenter: some View {
     if model.isRecording {
       recordingReadout
+        .transition(reduceMotion ? .opacity : .scale(scale: 0.86).combined(with: .opacity))
     } else {
       modeStrip
+        .transition(reduceMotion ? .opacity : .scale(scale: 0.86).combined(with: .opacity))
     }
   }
 
   private var recordingReadout: some View {
-    HStack(spacing: 6) {
-      Circle().fill(.red).frame(width: 8, height: 8)
+    HStack(spacing: 7) {
+      Circle()
+        .fill(.red)
+        .frame(width: 8, height: 8)
       Text(formattedDuration)
         .font(.system(.caption, design: .rounded).weight(.bold))
         .monospacedDigit()
         .foregroundStyle(.red)
+        // Digits roll over rather than blinking between seconds.
+        .contentTransition(.numericText())
+        .animation(ApertureMotion.snap(reduceMotion), value: formattedDuration)
     }
+    .padding(.horizontal, 14)
     .frame(minHeight: ApertureStyle.bareControlSize)
     // The shutter button already reports the elapsed time as its value.
     .accessibilityHidden(true)
   }
 
-  /// Two words instead of a boxed segmented control.
+  /// Two words with one pill. The pill is a single view that moves between
+  /// them, so the selection travels instead of blinking from place to place.
   private var modeStrip: some View {
-    HStack(spacing: 26) {
+    HStack(spacing: 2) {
       ForEach(CameraCaptureMode.allCases, id: \.self) { mode in
         let isSelected = model.captureMode == mode
         Button {
+          guard !isSelected else { return }
+          // Deliberately not wrapped in withAnimation: the mode is applied on
+          // the camera queue and published back later, so that transaction
+          // would be long finished. The animation is keyed to the published
+          // value at the end of this view instead.
           model.setCaptureMode(mode)
         } label: {
           Text(mode.label.uppercased())
             .font(.system(.caption, design: .rounded).weight(.bold))
-            .tracking(1.6)
-            .foregroundStyle(isSelected ? ApertureStyle.amber : ApertureStyle.quiet)
-            .frame(minWidth: ApertureStyle.bareControlSize, minHeight: ApertureStyle.bareControlSize)
-            .contentShape(Rectangle())
+            .tracking(1.5)
+            .foregroundStyle(isSelected ? ApertureStyle.ink : ApertureStyle.bone)
+            .padding(.horizontal, 15)
+            .frame(minHeight: ApertureStyle.bareControlSize)
+            .background {
+              if isSelected {
+                Capsule()
+                  .fill(ApertureStyle.amber)
+                  .matchedGeometryEffect(id: "capture-mode", in: chrome)
+              }
+            }
+            .contentShape(Capsule())
         }
         .buttonStyle(.plain)
         .accessibilityLabel(mode.label)
@@ -437,6 +513,7 @@ struct ContentView: View {
       }
     }
     .disabled(model.isRecording)
+    .animation(ApertureMotion.morph(reduceMotion), value: model.captureMode)
     .accessibilityElement(children: .contain)
     .accessibilityLabel("Capture mode")
     .accessibilityValue(model.captureMode.label)
@@ -505,17 +582,24 @@ struct ContentView: View {
     } label: {
       ZStack {
         Circle()
-          .stroke(model.isRecording ? .red : ApertureStyle.amber, lineWidth: 2.5)
+          .stroke(model.isRecording ? Color.red : ApertureStyle.amber, lineWidth: 2.5)
           .frame(width: 82, height: 82)
-        if model.isRecording {
-          RoundedRectangle(cornerRadius: 6, style: .continuous)
-            .fill(.red)
-            .frame(width: 30, height: 30)
-        } else {
-          Circle().fill(ApertureStyle.bone).frame(width: 68, height: 68)
-        }
+        // A single rounded rectangle carries the whole state change: at a
+        // corner radius of half its side it is a disc, and it rounds down
+        // into the stop square as it shrinks. Two swapped shapes cannot
+        // interpolate; one shape can.
+        RoundedRectangle(
+          cornerRadius: model.isRecording ? 9 : 34, style: .continuous
+        )
+        .fill(model.isRecording ? Color.red : ApertureStyle.bone)
+        .frame(
+          width: model.isRecording ? 32 : 68,
+          height: model.isRecording ? 32 : 68)
       }
       .frame(width: 84, height: 84)
+      .animation(ApertureMotion.morph(reduceMotion), value: model.isRecording)
+      .scaleEffect(shutterIsReady ? 1 : 0.94)
+      .animation(ApertureMotion.snap(reduceMotion), value: shutterIsReady)
     }
     .buttonStyle(.plain)
     .disabled(!shutterIsReady)

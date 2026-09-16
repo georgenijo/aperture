@@ -28,7 +28,51 @@ enum ApertureStyle {
   }
 }
 
+/// One place to tune how the camera moves. Springs rather than easing: a
+/// camera control should feel like it has mass and settle, not like it is
+/// playing a timed animation. Short responses keep it quick to the hand.
+enum ApertureMotion {
+  /// Small state flips: a symbol changing, a pill sliding.
+  static func snap(_ reduceMotion: Bool) -> Animation? {
+    reduceMotion ? nil : .spring(response: 0.26, dampingFraction: 0.82)
+  }
+
+  /// Shape and frame changes that the eye tracks across the screen.
+  static func morph(_ reduceMotion: Bool) -> Animation? {
+    reduceMotion ? nil : .spring(response: 0.34, dampingFraction: 0.84)
+  }
+}
+
 extension View {
+  /// Liquid Glass where the system has it, the app's own smoked panel where
+  /// it does not. Routing both through one modifier keeps the fallback from
+  /// drifting away from the real thing.
+  @ViewBuilder
+  func apertureGlassCapsule(isEnabled: Bool = true) -> some View {
+    if !isEnabled {
+      self
+    } else if #available(iOS 26.0, *) {
+      glassEffect(.regular.interactive(), in: Capsule())
+    } else {
+      // Liquid Glass adapts its own contrast to what is behind it. This
+      // fallback cannot, and it may sit over a white wall in full-screen
+      // mode, so it is opaque enough to carry bone and amber on its own.
+      background(.black.opacity(0.62), in: Capsule())
+        .overlay(Capsule().stroke(ApertureStyle.line, lineWidth: 1))
+    }
+  }
+
+  /// Groups nearby glass so the system can blend and morph the shapes into
+  /// one another instead of stacking independent panes. A no-op before 26.
+  @ViewBuilder
+  func apertureGlassGroup(spacing: CGFloat = 22) -> some View {
+    if #available(iOS 26.0, *) {
+      GlassEffectContainer(spacing: spacing) { self }
+    } else {
+      self
+    }
+  }
+
   /// Controls that sit on the app's own dark surface need no help. Over a
   /// live image they do, so full-screen mode carries a soft drop shadow
   /// rather than a scrim that would dim the photograph.
