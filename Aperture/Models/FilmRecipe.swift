@@ -422,7 +422,7 @@ enum FilmRecipeCatalog {
       .softness(SoftnessStage(amount: 0.72, kind: .gaussian)),
       // Runs before chromatic aberration deliberately, so the stamp picks up
       // the colour fringe like a real print would.
-      .dateStamp(DateStampStage()),
+      .dateStamp(DateStampStage(style: .sevenSegment)),
       // Red inside, blue outside; roughly a 10px corner separation at 12 MP.
       .chromaticAberration(
         ChromaticAberrationStage(
