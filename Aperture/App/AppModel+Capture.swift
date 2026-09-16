@@ -303,7 +303,8 @@ extension AppModel {
       return try FilmProcessor.shared.encodedData(
         image,
         format: .jpeg,
-        quality: CGFloat(item.recipe.resolvedSettings.compressionQuality)
+        quality: CGFloat(item.recipe.resolvedSettings.compressionQuality),
+        metadataSource: sourceData
       )
     }.value
 

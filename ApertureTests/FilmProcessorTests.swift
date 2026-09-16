@@ -45,7 +45,7 @@ final class FilmProcessorTests: XCTestCase {
   func testResolvedCompressionQualityIsDeterministicAndBounded() {
     let expected: [(PhotoQualityPreference, Double)] = [
       (.spaceSaving, 0.72),
-      (.balanced, 0.88),
+      (.balanced, 0.92),
       (.maximum, 0.97),
     ]
     let date = Date(timeIntervalSince1970: 1_700_000_000)

@@ -138,11 +138,19 @@ final class FilmProcessor: @unchecked Sendable {
   }
 
   /// Encode a finite sRGB Core Image image through Image I/O.
+  ///
+  /// `metadataSource` is the original camera capture bytes (before
+  /// development). When supplied, its EXIF/TIFF/GPS properties are copied
+  /// onto the rendered output so the developed JPEG keeps the camera's
+  /// capture metadata (make/model/software, DateTimeOriginal, exposure,
+  /// GPS) while dropping cues that described the original, un-rendered
+  /// pixels rather than the developed ones.
   func encode(
     _ image: CIImage,
     to url: URL,
     format: FilmOutputFormat,
-    quality: CGFloat = 0.92
+    quality: CGFloat = 0.92,
+    metadataSource: Data? = nil
   ) throws {
     try withPermit {
       let extent = try Self.finiteExtent(image.extent)
@@ -162,7 +170,8 @@ final class FilmProcessor: @unchecked Sendable {
         throw FilmProcessorError.cannotCreateDestination
       }
       let clampedQuality = min(max(quality.isFinite ? quality : 0.92, 0), 1)
-      let options: [CFString: Any] = [kCGImageDestinationLossyCompressionQuality: clampedQuality]
+      let options = Self.destinationOptions(
+        quality: clampedQuality, cgImage: cgImage, metadataSource: metadataSource)
       CGImageDestinationAddImage(destination, cgImage, options as CFDictionary)
       guard CGImageDestinationFinalize(destination) else {
         throw FilmProcessorError.cannotFinalizeDestination
@@ -173,7 +182,8 @@ final class FilmProcessor: @unchecked Sendable {
   func encodedData(
     _ image: CIImage,
     format: FilmOutputFormat,
-    quality: CGFloat = 0.92
+    quality: CGFloat = 0.92,
+    metadataSource: Data? = nil
   ) throws -> Data {
     try withPermit {
       let extent = try Self.finiteExtent(image.extent)
@@ -194,13 +204,65 @@ final class FilmProcessor: @unchecked Sendable {
         throw FilmProcessorError.cannotCreateDestination
       }
       let clampedQuality = min(max(quality.isFinite ? quality : 0.92, 0), 1)
-      let options: [CFString: Any] = [kCGImageDestinationLossyCompressionQuality: clampedQuality]
+      let options = Self.destinationOptions(
+        quality: clampedQuality, cgImage: cgImage, metadataSource: metadataSource)
       CGImageDestinationAddImage(destination, cgImage, options as CFDictionary)
       guard CGImageDestinationFinalize(destination) else {
         throw FilmProcessorError.cannotFinalizeDestination
       }
       return output as Data
     }
+  }
+
+  /// Build the `CGImageDestinationAddImage` options dictionary: the
+  /// persisted compression quality, no embedded thumbnail, and (when a
+  /// metadata source decodes) the original capture's image properties
+  /// re-targeted at the rendered pixels rather than the original ones.
+  ///
+  /// `CGImageDestinationAddImageFromSource` is deliberately not used here:
+  /// it would re-encode the *original* source pixels, not our rendered
+  /// `cgImage`. Passing a properties dictionary alongside the rendered
+  /// image is the correct way to keep the metadata while writing the
+  /// developed pixels.
+  private static func destinationOptions(
+    quality: CGFloat,
+    cgImage: CGImage,
+    metadataSource: Data?
+  ) -> [CFString: Any] {
+    var options: [CFString: Any] = [
+      kCGImageDestinationLossyCompressionQuality: quality,
+      kCGImageDestinationEmbedThumbnail: false,
+    ]
+
+    guard let metadataSource,
+      let source = CGImageSourceCreateWithData(metadataSource as CFData, nil),
+      var properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any]
+    else {
+      return options
+    }
+
+    // The render is always upright and may be a different size than the
+    // original capture; drop or rewrite anything that described the
+    // original, un-developed pixels instead of the rendered ones.
+    properties[kCGImagePropertyOrientation] = 1
+    properties.removeValue(forKey: kCGImagePropertyPixelWidth)
+    properties.removeValue(forKey: kCGImagePropertyPixelHeight)
+
+    if var tiff = properties[kCGImagePropertyTIFFDictionary] as? [CFString: Any] {
+      tiff[kCGImagePropertyTIFFOrientation] = 1
+      properties[kCGImagePropertyTIFFDictionary] = tiff
+    }
+
+    if var exif = properties[kCGImagePropertyExifDictionary] as? [CFString: Any] {
+      exif[kCGImagePropertyExifPixelXDimension] = cgImage.width
+      exif[kCGImagePropertyExifPixelYDimension] = cgImage.height
+      properties[kCGImagePropertyExifDictionary] = exif
+    }
+
+    for (key, value) in properties {
+      options[key] = value
+    }
+    return options
   }
 
   /// Downsample a processed image without changing full-resolution output.
