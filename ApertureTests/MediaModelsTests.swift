@@ -58,7 +58,9 @@ final class MediaModelsTests: XCTestCase {
     let decoded = try ApertureJSON.makeDecoder().decode(MediaItem.self, from: data)
 
     XCTAssertEqual(decoded, item)
-    XCTAssertEqual(decoded.recipe.resolvedSettings.dateStampText, "2026/09/15  13:15")
+    // 1998's forced stamp format is `.huji` ("M d ''yy"); this capture date
+    // is 2026-09-15 13:15 in America/New_York, so the text is "9 15 '26".
+    XCTAssertEqual(decoded.recipe.resolvedSettings.dateStampText, "9 15 '26")
     XCTAssertEqual(decoded.recipe.resolvedSettings.timeZoneIdentifier, "America/New_York")
   }
 

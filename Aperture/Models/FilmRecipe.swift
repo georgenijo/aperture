@@ -147,8 +147,8 @@ struct FilmParameters: Codable, Hashable, Sendable {
 /// knob set applied in a hard-coded order; v2 recipes carry that same order
 /// (and, for future recipes, other orders) explicitly as `stages`.
 enum FilmRecipeVersion {
-  static let current = 2
-  static let supported = 1...2
+  static let current = 3
+  static let supported = 1...3
 }
 
 struct FilmRecipe: Codable, Hashable, Identifiable, Sendable {
@@ -182,7 +182,7 @@ struct FilmRecipe: Codable, Hashable, Identifiable, Sendable {
     let stampConfiguration =
       id == .nineteenNinetyEight
       ? DateStampConfiguration(
-        mode: .current, format: .digitalDateTime, localeIdentifier: "en_US_POSIX")
+        mode: .current, format: .huji, localeIdentifier: "en_US_POSIX")
       : options.dateStamp
     var random = SeededRandomNumberGenerator(seed: seed)
     let exposureShift = random.value(in: -0.045...0.045)
@@ -207,7 +207,10 @@ struct FilmRecipe: Codable, Hashable, Identifiable, Sendable {
             channelSplit: grade.channelSplit,
             blackCrush: grade.blackCrush,
             shadowTint: grade.shadowTint,
-            highlightTint: grade.highlightTint
+            highlightTint: grade.highlightTint,
+            blueGreenSuppression: grade.blueGreenSuppression,
+            blueDarken: grade.blueDarken,
+            redHueShift: grade.redHueShift
           ))
       case .grain(var grainStage):
         grainStage.amount = Self.clampUnit(grainStage.amount + grainShift)
@@ -381,23 +384,55 @@ extension AppliedFilmRecipe: Codable {
 enum FilmRecipeCatalog {
   static let all: [FilmRecipe] = [nineteenNinetyEight, night, cinema]
 
+  // Huji's signature is a dense disposable-camera curve with vivid source
+  // colours, cool/cyan-leaning shade pulled down toward neutral, warm
+  // skin/wood pushed toward orange, and imperfect plastic-lens optics: a
+  // pink-tinted halation, an isotropic soft-focus blur, a deliberately
+  // deterministic (unseeded) chromatic-aberration fringe the date stamp sits
+  // on top of, and a narrow, top/right-only, capped-alpha light leak. This
+  // is authored as an explicit stage list (not the flat v1 `parameters:`
+  // knobs) because the look now depends on stage-specific fields -- tint,
+  // radius behaviour, softness kind, seeding, edges, alpha cap -- that the
+  // v1 `FilmParameters` shape has no room for.
   static let nineteenNinetyEight = FilmRecipe(
     id: .nineteenNinetyEight,
     version: FilmRecipeVersion.current,
     displayName: "1998",
-    // Huji's signature is a dense disposable-camera curve with vivid source
-    // colours, cool shade, warm skin/wood, and imperfect optics. Avoid broad
-    // split tints here: they turn neutral walls and white highlights pink.
-    parameters: FilmParameters(
-      exposure: 0.015, contrast: 1.22, saturation: 1.42, warmth: 0.10,
-      highlightRolloff: 0.16, shadowCoolness: 0.42,
-      grainAmount: 0.24, grainSize: 0.56, halation: 0.16,
-      vignette: 0.075, softness: 0.72, chromaticAberration: 0.78,
-      lightLeakProbability: 0.46, lightLeakStrength: 0.48,
-      channelSplit: 0.07, blackCrush: 0.43,
-      shadowTint: FilmColorTint(red: -0.018, green: 0.012, blue: 0.045),
-      highlightTint: FilmColorTint(red: 0.014, green: 0.006, blue: -0.012)
-    )
+    stages: [
+      .colorGrade(
+        FilmColorGrade(
+          exposure: -0.30, contrast: 1.10, saturation: 1.15, warmth: 0.35,
+          highlightRolloff: 0.30, shadowCoolness: 0.30, channelSplit: 0.04, blackCrush: 0.18,
+          shadowTint: FilmColorTint(red: -0.010, green: 0, blue: 0.035),
+          highlightTint: FilmColorTint(red: 0.045, green: 0.020, blue: -0.040),
+          blueGreenSuppression: 0.8, blueDarken: 0.7, redHueShift: 0.6
+        )),
+      .halation(
+        HalationStage(
+          amount: 0.16, radiusScale: 0.005,
+          tint: .fixed(red: 1.0, green: 0.78, blue: 0.92), radiusScalesWithAmount: false)),
+      .softness(SoftnessStage(amount: 0.72, kind: .gaussian)),
+      // Runs before chromatic aberration deliberately, so the stamp picks up
+      // the colour fringe like a real print would.
+      .dateStamp(DateStampStage()),
+      // Red inside, blue outside; roughly a 10px corner separation at 12 MP.
+      .chromaticAberration(
+        ChromaticAberrationStage(
+          amount: 0.78, redGain: -0.0022, blueGain: 0.0032, lateralShiftScale: 0, seeded: false)),
+      .grain(GrainStage(amount: 0.12, size: 0.9)),
+      .lightLeak(
+        LightLeakStage(
+          probability: 0.46, strength: 0.30, minWidth: 0.10, maxWidth: 0.27,
+          palette: [
+            LightLeakColor(red: 1.0, green: 0.47, blue: 0.16),
+            LightLeakColor(red: 1.0, green: 0.42, blue: 0.12),
+            LightLeakColor(red: 1.0, green: 0.52, blue: 0.20),
+          ],
+          edges: [.top, .right],
+          alphaCap: 0.16
+        )),
+      .vignette(VignetteStage(amount: 0.20)),
+    ]
   )
 
   static let night = FilmRecipe(

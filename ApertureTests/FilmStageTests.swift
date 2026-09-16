@@ -103,9 +103,9 @@ final class FilmStageTests: XCTestCase {
     XCTAssertEqual(halationStage.intensityCap, 1)
     XCTAssertEqual(halationStage.radiusScale, 0.012)
     XCTAssertEqual(halationStage.minimumRadius, 1)
-    XCTAssertEqual(halationStage.warmRedGain, 0.20)
-    XCTAssertEqual(halationStage.warmGreenGain, 0.04)
-    XCTAssertEqual(halationStage.warmBlueGain, 0.10)
+    XCTAssertEqual(
+      halationStage.tint, .warmByAmount(red: 0.20, green: 0.04, blue: 0.10))
+    XCTAssertEqual(halationStage.radiusScalesWithAmount, true)
     XCTAssertEqual(halationStage.blendOpacityScale, 0.82)
     XCTAssertEqual(halationStage.blendOpacityCap, 0.68)
 
@@ -124,6 +124,8 @@ final class FilmStageTests: XCTestCase {
     XCTAssertEqual(leakStage.minIntensity, 0.68)
     XCTAssertEqual(leakStage.maxIntensity, 1.0)
     XCTAssertEqual(leakStage.palette, LightLeakStage.defaultPalette)
+    XCTAssertEqual(leakStage.edges, LightLeakDecision.Edge.allCases)
+    XCTAssertEqual(leakStage.alphaCap, 0.68)
 
     let partialDateStamp = Data(#"{"kind":"dateStamp","configuration":{}}"#.utf8)
     guard case .dateStamp(let dateStampStage) = try decoder.decode(
@@ -210,8 +212,12 @@ final class FilmStageTests: XCTestCase {
   /// independent guard so an unrelated future change to a stage's numbers
   /// is caught even where a byte-exact golden isn't in play.
   private let referenceStatistics: [FilmRecipeIdentifier: ReferenceStatistics] = [
+    // Re-measured for the 1998-Huji-parity retune (issue #18): the new grade's
+    // blue-suppression/red-hue-shift terms and retuned chromatic
+    // aberration/softness/light-leak stages shift this fixture's statistics
+    // from the pre-retune baseline (mean 0.5075, std 0.3309, redMean 0.5467).
     .nineteenNinetyEight: ReferenceStatistics(
-      mean: 0.5075, standardDeviation: 0.3309, redMean: 0.5467),
+      mean: 0.4665, standardDeviation: 0.3088, redMean: 0.5057),
     .night: ReferenceStatistics(mean: 0.4637, standardDeviation: 0.3341, redMean: 0.4914),
     .cinema: ReferenceStatistics(mean: 0.5476, standardDeviation: 0.2856, redMean: 0.5642),
     .legacyOriginal: ReferenceStatistics(mean: 0.4247, standardDeviation: 0.2533, redMean: 0.4417),

@@ -73,7 +73,7 @@ struct FilmProcessingDecision: Hashable, Sendable {
       leakStage.probability > 0,
       leakStage.strength > 0
     {
-      let edges = LightLeakDecision.Edge.allCases
+      let edges = leakStage.edges.isEmpty ? LightLeakDecision.Edge.allCases : leakStage.edges
       leak = LightLeakDecision(
         edge: edges[Int(random.next() % UInt64(edges.count))],
         position: random.value(in: leakStage.minPosition...leakStage.maxPosition),

@@ -18,6 +18,17 @@ final class FilmColorModelTests: XCTestCase {
     XCTAssertGreaterThan(wall.luminance, bottle.luminance + 0.45)
   }
 
+  func testHujiGradePullsBlueSkiesAndWarmsSkinTowardReferenceHues() {
+    // Reference outputs measured from a Huji-shot sky and a Huji-shot skin
+    // tone; probes the blueGreenSuppression/blueDarken/redHueShift terms
+    // introduced for the 1998 recipe. Tolerance matches the spec (12/255).
+    let sky = FilmColorModel.map(rgb(5, 90, 205), grade: huji)
+    assertClose(sky, rgb(4, 38, 152), tolerance: 12.0 / 255.0, "sky")
+
+    let skin = FilmColorModel.map(rgb(132, 39, 13), grade: huji)
+    assertClose(skin, rgb(147, 55, 17), tolerance: 12.0 / 255.0, "skin")
+  }
+
   func testNeutralGradeIsIdentity() {
     let neutral = FilmRecipeCatalog.legacyOriginal.stages.colorGrade ?? .neutral
     for value in stride(from: 0.0, through: 1.0, by: 0.125) {
