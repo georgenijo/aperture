@@ -58,7 +58,9 @@ final class MediaModelsTests: XCTestCase {
     let decoded = try ApertureJSON.makeDecoder().decode(MediaItem.self, from: data)
 
     XCTAssertEqual(decoded, item)
-    XCTAssertEqual(decoded.recipe.resolvedSettings.dateStampText, "2026/09/15  13:15")
+    // 1998's forced stamp format is `.huji` ("M d ''yy"); this capture date
+    // is 2026-09-15 13:15 in America/New_York, so the text is "9 15 '26".
+    XCTAssertEqual(decoded.recipe.resolvedSettings.dateStampText, "9 15 '26")
     XCTAssertEqual(decoded.recipe.resolvedSettings.timeZoneIdentifier, "America/New_York")
   }
 
@@ -179,6 +181,60 @@ final class MediaModelsTests: XCTestCase {
       ),
       "1998 02 28"
     )
+  }
+
+  func testLegacyTimestampMigrationSkipsSevenSegmentCapturesAndTargetsOldMonospacedOnes() {
+    let digital = DateStampConfiguration(
+      mode: .current, format: .digitalDateTime, localeIdentifier: "en_US_POSIX")
+    let capturedAt = Date(timeIntervalSince1970: 1_789_500_000)
+    let options = FilmProcessingOptions(
+      lightLeaksEnabled: true,
+      dateStamp: DateStampConfiguration(
+        mode: .current, format: .yearMonthDay, localeIdentifier: "en_US_POSIX"))
+
+    // A version-3 1998 capture: `resolve()` forces the `.huji` stamp and the
+    // seven-segment style. It must never be re-rendered with a digital stamp
+    // (the LED renderer has no `/` or `:` glyphs).
+    let huji = FilmRecipeCatalog.nineteenNinetyEight.resolve(
+      seed: 1, capturedAt: capturedAt, options: options, timeZone: .gmt)
+    XCTAssertEqual(huji.stages.dateStamp?.style, .sevenSegment)
+    XCTAssertEqual(huji.resolvedSettings.dateStampConfiguration.format, .huji)
+    XCTAssertFalse(huji.needsLegacyTimestampMigration(to: digital))
+
+    // An older monospaced 1998 capture with a year-month-day stamp is the
+    // population the migration exists for.
+    let legacyStages = FilmStage.legacyPipeline(
+      parameters: FilmParameters(
+        exposure: -0.3, contrast: 1.1, saturation: 1.15, warmth: 0.35,
+        highlightRolloff: 0.3, shadowCoolness: 0.3,
+        grainAmount: 0.12, grainSize: 0.9, halation: 0.16,
+        vignette: 0.2, softness: 0.72, chromaticAberration: 0.78,
+        lightLeakProbability: 0.46, lightLeakStrength: 0.48),
+      identifier: .nineteenNinetyEight)
+    XCTAssertEqual(legacyStages.dateStamp?.style, .monospaced)
+    let legacy = AppliedFilmRecipe(
+      identifier: .nineteenNinetyEight, version: 2, seed: 1, stages: legacyStages,
+      resolvedSettings: FilmResolvedSettings(
+        lightLeakApplied: false,
+        dateStampConfiguration: options.dateStamp,
+        dateStampText: "1998 05 01",
+        timeZoneIdentifier: "GMT"))
+    XCTAssertTrue(legacy.needsLegacyTimestampMigration(to: digital))
+
+    // Already migrated: digital configuration with a time in the text.
+    let migrated = AppliedFilmRecipe(
+      identifier: .nineteenNinetyEight, version: 2, seed: 1, stages: legacyStages,
+      resolvedSettings: FilmResolvedSettings(
+        lightLeakApplied: false,
+        dateStampConfiguration: digital,
+        dateStampText: "1998/05/01  09:30",
+        timeZoneIdentifier: "GMT"))
+    XCTAssertFalse(migrated.needsLegacyTimestampMigration(to: digital))
+
+    // Other recipes are never candidates.
+    let night = FilmRecipeCatalog.night.resolve(
+      seed: 1, capturedAt: capturedAt, options: options, timeZone: .gmt)
+    XCTAssertFalse(night.needsLegacyTimestampMigration(to: digital))
   }
 
   func testProcessingAttemptCountSurvivesEveryPhaseAndLegacyManifests() throws {

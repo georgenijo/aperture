@@ -43,6 +43,12 @@ struct FilmColorGrade: Codable, Hashable, Sendable {
   let blackCrush: Double
   let shadowTint: FilmColorTint
   let highlightTint: FilmColorTint
+  /// How strongly green is pulled down where blue dominates a pixel (0...1).
+  let blueGreenSuppression: Double
+  /// How strongly blue itself is pulled down where blue dominates (0...1).
+  let blueDarken: Double
+  /// How strongly a red-dominant hue is rotated toward orange/yellow (0...1).
+  let redHueShift: Double
 
   static let neutral = FilmColorGrade(
     exposure: 0, contrast: 1, saturation: 1, warmth: 0,
@@ -59,7 +65,10 @@ struct FilmColorGrade: Codable, Hashable, Sendable {
     channelSplit: Double = 0,
     blackCrush: Double = 0,
     shadowTint: FilmColorTint = .neutral,
-    highlightTint: FilmColorTint = .neutral
+    highlightTint: FilmColorTint = .neutral,
+    blueGreenSuppression: Double = 0,
+    blueDarken: Double = 0,
+    redHueShift: Double = 0
   ) {
     self.exposure = Self.clamp(exposure, to: -1...1, fallback: 0)
     self.contrast = Self.clamp(contrast, to: 0.75...1.5, fallback: 1)
@@ -71,11 +80,15 @@ struct FilmColorGrade: Codable, Hashable, Sendable {
     self.blackCrush = Self.clampUnit(blackCrush)
     self.shadowTint = shadowTint
     self.highlightTint = highlightTint
+    self.blueGreenSuppression = Self.clampUnit(blueGreenSuppression)
+    self.blueDarken = Self.clampUnit(blueDarken)
+    self.redHueShift = Self.clampUnit(redHueShift)
   }
 
   private enum CodingKeys: String, CodingKey {
     case exposure, contrast, saturation, warmth, highlightRolloff, shadowCoolness
     case channelSplit, blackCrush, shadowTint, highlightTint
+    case blueGreenSuppression, blueDarken, redHueShift
   }
 
   init(from decoder: Decoder) throws {
@@ -91,7 +104,11 @@ struct FilmColorGrade: Codable, Hashable, Sendable {
       blackCrush: try values.decodeIfPresent(Double.self, forKey: .blackCrush) ?? 0,
       shadowTint: try values.decodeIfPresent(FilmColorTint.self, forKey: .shadowTint) ?? .neutral,
       highlightTint: try values.decodeIfPresent(FilmColorTint.self, forKey: .highlightTint)
-        ?? .neutral
+        ?? .neutral,
+      blueGreenSuppression: try values.decodeIfPresent(
+        Double.self, forKey: .blueGreenSuppression) ?? 0,
+      blueDarken: try values.decodeIfPresent(Double.self, forKey: .blueDarken) ?? 0,
+      redHueShift: try values.decodeIfPresent(Double.self, forKey: .redHueShift) ?? 0
     )
   }
 
@@ -147,6 +164,30 @@ enum FilmColorModel {
     // makes white walls lavender instead of leaving them photographic.
     red = clampUnit(red * (1 + grade.warmth * 0.08))
     blue = clampUnit(blue * (1 - grade.warmth * 0.07))
+
+    // Huji-style blue handling: cheap point-and-shoot sensors render blue
+    // skies/shade as cyan-leaning and slightly overexposed relative to warm
+    // subjects. Pull green and blue down wherever blue is the dominant
+    // channel, and rotate a strongly red-dominant hue (skin, wood) toward
+    // orange by nudging green (and, slightly, red) up together.
+    //
+    // The coefficients below (0.85 / 0.55 / 0.60 / 0.35) were retuned from
+    // the initial 0.45 / 0.25 / 0.12 estimate: at this placement (after
+    // warmth, before split toning) the smaller values left the reference sky
+    // and skin probes outside the required 12/255 tolerance. The red-hue
+    // term was also extended to nudge red itself (not just green) toward
+    // the dominant channel; a green-only adjustment cannot reach the target
+    // skin response (147, 55, 17) because the exposure/contrast/saturation
+    // stages above already fix red below that target before this step runs,
+    // and this step is the only place red-dominant hues are rotated.
+    let blueDominance = clampUnit((blue - max(red, green)) / max(blue, 0.001))
+    green = clampUnit(green * (1 - 0.85 * grade.blueGreenSuppression * blueDominance))
+    blue = clampUnit(blue * (1 - 0.55 * grade.blueDarken * blueDominance))
+    if red > green, green < red * 0.5 {
+      let redHueShiftAmount = grade.redHueShift * (red - green)
+      green = clampUnit(green + 0.60 * redHueShiftAmount)
+      red = clampUnit(red + 0.35 * redHueShiftAmount)
+    }
 
     // Split toning by tonal band. Deep blacks are excluded from the shadow
     // band so a crushed bottle stays black instead of turning orange.

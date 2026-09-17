@@ -95,7 +95,8 @@ extension FilmProcessor {
   static func makeLightLeakImage(
     extent: CGRect,
     decision: LightLeakDecision,
-    strength: Double
+    strength: Double,
+    alphaCap: Double = 0.68
   ) -> CIImage? {
     let width = min(2048, max(1, Int(ceil(extent.width))))
     let height = min(2048, max(1, Int(ceil(extent.height))))
@@ -129,7 +130,7 @@ extension FilmProcessor {
           -(alongOffset * alongOffset) / max(0.045, decision.width * decision.width * 1.8))
         let directional = 0.82 + 0.18 * sin((u + v) * 12 + decision.angle * 5)
         let alpha = min(
-          0.68,
+          alphaCap,
           max(0, strength) * decision.intensity * edgeFalloff
             * (0.78 * stripe + 0.22 * haze) * directional)
         let offset = (y * width + x) * 4

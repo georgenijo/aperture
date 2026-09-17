@@ -2,7 +2,7 @@ import Foundation
 
 struct ThumbnailCacheVersion: Codable, Hashable, Sendable {
   static let current = ThumbnailCacheVersion(
-    namespace: "aperture.thumbnail", schema: 1, renderer: 3)
+    namespace: "aperture.thumbnail", schema: 1, renderer: 4)
 
   let namespace: String
   let schema: Int

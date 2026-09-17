@@ -81,8 +81,9 @@ Measure with Instruments/OSLog signposts or timestamped test notes around: shutt
 
 - [ ] Confirm a pending item is committed before development and that retry works after a forced/observed failure.
 - [ ] Compare repeated development of the same item: output must be deterministic from its persisted recipe/seed.
-- [ ] Check each recipe, light-leak toggle, date-stamp mode, and preserved-original setting.
-- [ ] Change Photo Quality after capture, retry/re-develop the item, and verify the persisted JPEG compression quality is used rather than the new setting.
+- [ ] Check each recipe, light-leak toggle, date-stamp mode, and preserved-original setting. For 1998, confirm the seven-segment orange stamp sits along the left edge of a portrait capture reading bottom-to-top (bottom-right, unrotated, for landscape), and that its light leaks only enter from the top or right edge.
+- [ ] Change Photo Quality after capture, retry/re-develop the item, and verify the persisted JPEG compression quality is used rather than the new setting (Balanced now resolves to 0.92).
+- [ ] Inspect a developed JPEG's metadata (e.g. `exiftool`): capture EXIF/TIFF fields are retained, orientation reads as upright, pixel dimensions match the rendered output, and no embedded thumbnail is present. Image I/O offers no switch for 4:4:4 chroma subsampling, so do not gate on it.
 - [ ] Enable a date stamp for a short film and verify the same persisted date-stamp overlay remains stable across its frames.
 - [ ] Interrupt an install with pending/processing items, relaunch, and verify development resumes sequentially without duplicate or lost Lab items.
 - [ ] Verify video development keeps color/light-leak treatment static while grain evolves deterministically by frame; verify output is playable with its audio track.

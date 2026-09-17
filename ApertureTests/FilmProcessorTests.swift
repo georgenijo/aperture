@@ -45,7 +45,7 @@ final class FilmProcessorTests: XCTestCase {
   func testResolvedCompressionQualityIsDeterministicAndBounded() {
     let expected: [(PhotoQualityPreference, Double)] = [
       (.spaceSaving, 0.72),
-      (.balanced, 0.88),
+      (.balanced, 0.92),
       (.maximum, 0.97),
     ]
     let date = Date(timeIntervalSince1970: 1_700_000_000)
@@ -102,7 +102,7 @@ final class FilmProcessorTests: XCTestCase {
       settingsAtNaN.compressionQuality, PhotoQualityPreference.balanced.compressionQuality)
   }
 
-  func testLegacyResolvedSettingsDecodeDefaultsToBalancedQuality() throws {
+  func testLegacyResolvedSettingsDecodeToTheFrozenHistoricalBalancedQuality() throws {
     let legacyPayload = Data(
       """
       {
@@ -119,7 +119,11 @@ final class FilmProcessorTests: XCTestCase {
     )
 
     let decoded = try JSONDecoder().decode(FilmResolvedSettings.self, from: legacyPayload)
-    XCTAssertEqual(decoded.compressionQuality, PhotoQualityPreference.balanced.compressionQuality)
+    // Frozen at the Balanced value that was current when such manifests were
+    // written; raising the preference (0.88 → 0.92) must not re-encode them.
+    XCTAssertEqual(decoded.compressionQuality, 0.88)
+    XCTAssertEqual(FilmResolvedSettings.legacyCompressionQuality, 0.88)
+    XCTAssertNotEqual(decoded.compressionQuality, PhotoQualityPreference.balanced.compressionQuality)
   }
 
   func testPersistedDateStampTextAndLayoutScaleTogether() throws {
@@ -138,14 +142,16 @@ final class FilmProcessorTests: XCTestCase {
       options: options,
       timeZone: TimeZone(secondsFromGMT: 0)!
     )
-    XCTAssertEqual(recipe.resolvedSettings.dateStampText, "1999/01/01  00:00")
+    // 1998's forced stamp format is `.huji` ("M d ''yy"); this capture date
+    // is 1999-01-01 00:00 UTC, so the rendered text is "1 1 '99".
+    XCTAssertEqual(recipe.resolvedSettings.dateStampText, "1 1 '99")
 
     let small = try XCTUnwrap(
       FilmDateStampLayout.make(
-        text: "1999/01/01  00:00", canvasSize: CGSize(width: 1000, height: 800)))
+        text: "1 1 '99", canvasSize: CGSize(width: 1000, height: 800)))
     let large = try XCTUnwrap(
       FilmDateStampLayout.make(
-        text: "1999/01/01  00:00", canvasSize: CGSize(width: 2000, height: 1600)))
+        text: "1 1 '99", canvasSize: CGSize(width: 2000, height: 1600)))
     XCTAssertEqual(large.frame.minX, small.frame.minX * 2, accuracy: 0.01)
     XCTAssertEqual(large.frame.minY, small.frame.minY * 2, accuracy: 0.01)
     XCTAssertEqual(large.frame.width, small.frame.width * 2, accuracy: 0.01)
@@ -193,6 +199,148 @@ final class FilmProcessorTests: XCTestCase {
     XCTAssertEqual(centre.blue, expected.blue, accuracy: 3 / 255, "blue")
     // Sanity: the Huji grade should not paint a neutral wall lavender.
     XCTAssertLessThan(abs(centre.blue - centre.red), 0.08)
+  }
+
+  func testChromaticAberrationBlueSeparatesFartherThanRedAndIsDeterministicAcrossSeeds()
+    async throws
+  {
+    // A mid-grey field with a bright square off-centre: the 1998 stage
+    // scales the red/blue records around the optical centre by different
+    // amounts, so a feature away from centre should land at a different
+    // distance per channel. `seeded: false` also means two different
+    // render seeds must produce byte-identical output.
+    let source = try XCTUnwrap(
+      makeGreySquareImage(
+        width: 512, height: 384, squareRect: CGRect(x: 360, y: 40, width: 80, height: 80)))
+    let processor = FilmProcessor(context: CIContext(options: [.useSoftwareRenderer: true]))
+    let stages: [FilmStage] = [
+      .colorGrade(.neutral),
+      .halation(HalationStage(amount: 0)),
+      .softness(SoftnessStage(amount: 0)),
+      .chromaticAberration(
+        ChromaticAberrationStage(
+          amount: 0.78, redGain: -0.0022, blueGain: 0.0032, lateralShiftScale: 0, seeded: false)),
+      .grain(GrainStage(amount: 0, size: 1)),
+      .lightLeak(LightLeakStage(probability: 0, strength: 0, minWidth: 0.16, maxWidth: 0.42)),
+      .vignette(VignetteStage(amount: 0)),
+      .dateStamp(DateStampStage()),
+    ]
+    func recipe(seed: UInt64) -> AppliedFilmRecipe {
+      AppliedFilmRecipe(
+        identifier: .legacyOriginal, version: FilmRecipeVersion.current, seed: seed,
+        stages: stages,
+        resolvedSettings: FilmResolvedSettings(
+          lightLeakApplied: false, dateStampConfiguration: .off, dateStampText: nil,
+          timeZoneIdentifier: "GMT"))
+    }
+
+    let first = try await processor.renderedCGImage(
+      CIImage(cgImage: source), recipe: recipe(seed: 1))
+    let second = try await processor.renderedCGImage(
+      CIImage(cgImage: source), recipe: recipe(seed: 2))
+    XCTAssertEqual(try pixelBytes(first), try pixelBytes(second))
+
+    let redCentroid = try brightChannelCentroid(first, channelOffset: 0, threshold: 0.75)
+    let blueCentroid = try brightChannelCentroid(first, channelOffset: 2, threshold: 0.75)
+    let centre = CGPoint(x: Double(first.width) / 2, y: Double(first.height) / 2)
+    let redDistance = hypot(redCentroid.x - centre.x, redCentroid.y - centre.y)
+    let blueDistance = hypot(blueCentroid.x - centre.x, blueCentroid.y - centre.y)
+    XCTAssertGreaterThan(blueDistance, redDistance)
+  }
+
+  func testGaussianSoftnessBlursIsotropicallyAndChangesOutput() async throws {
+    let processor = FilmProcessor(context: CIContext(options: [.useSoftwareRenderer: true]))
+    let verticalSource = try XCTUnwrap(makeEdgeImage(width: 400, height: 400, verticalEdge: true))
+    let horizontalSource = try XCTUnwrap(
+      makeEdgeImage(width: 400, height: 400, verticalEdge: false))
+
+    func stages(amount: Double) -> [FilmStage] {
+      [
+        .colorGrade(.neutral),
+        .halation(HalationStage(amount: 0)),
+        .softness(SoftnessStage(amount: amount, kind: .gaussian, gaussianRadiusScale: 0.01)),
+        .chromaticAberration(ChromaticAberrationStage(amount: 0)),
+        .grain(GrainStage(amount: 0, size: 1)),
+        .lightLeak(LightLeakStage(probability: 0, strength: 0, minWidth: 0.16, maxWidth: 0.42)),
+        .vignette(VignetteStage(amount: 0)),
+        .dateStamp(DateStampStage()),
+      ]
+    }
+    func recipe(amount: Double) -> AppliedFilmRecipe {
+      AppliedFilmRecipe(
+        identifier: .nineteenNinetyEight, version: FilmRecipeVersion.current, seed: 5,
+        stages: stages(amount: amount),
+        resolvedSettings: FilmResolvedSettings(
+          lightLeakApplied: false, dateStampConfiguration: .off, dateStampText: nil,
+          timeZoneIdentifier: "GMT"))
+    }
+
+    let verticalSharp = try await processor.renderedCGImage(
+      CIImage(cgImage: verticalSource), recipe: recipe(amount: 0))
+    let verticalBlurred = try await processor.renderedCGImage(
+      CIImage(cgImage: verticalSource), recipe: recipe(amount: 1))
+    let horizontalBlurred = try await processor.renderedCGImage(
+      CIImage(cgImage: horizontalSource), recipe: recipe(amount: 1))
+
+    let sharpWidth = try transitionWidth(verticalSharp, verticalEdge: true)
+    let verticalWidth = try transitionWidth(verticalBlurred, verticalEdge: true)
+    let horizontalWidth = try transitionWidth(horizontalBlurred, verticalEdge: false)
+
+    // Gaussian softness visibly widens a hard edge...
+    XCTAssertGreaterThan(verticalWidth, sharpWidth + 3)
+    // ...and does so isotropically: horizontal- and vertical-edge blur widths agree.
+    XCTAssertEqual(
+      Double(verticalWidth), Double(horizontalWidth),
+      accuracy: Double(verticalWidth) * 0.25 + 2)
+  }
+
+  func testNineteenNinetyEightLightLeakOnlyPicksConfiguredEdgesAcross200Seeds() throws {
+    let leakStage = try XCTUnwrap(FilmRecipeCatalog.nineteenNinetyEight.stages.lightLeak)
+    XCTAssertEqual(leakStage.edges, [.top, .right])
+
+    var sawALeak = false
+    for seed in UInt64(0)..<200 {
+      let recipe = FilmRecipeCatalog.nineteenNinetyEight.resolve(
+        seed: seed,
+        capturedAt: Date(timeIntervalSince1970: 0),
+        options: FilmProcessingOptions(lightLeaksEnabled: true, dateStamp: .off),
+        timeZone: TimeZone(secondsFromGMT: 0)!
+      )
+      if let leak = FilmProcessingDecision.make(for: recipe).leak {
+        sawALeak = true
+        XCTAssertTrue(leak.edge == .top || leak.edge == .right, "seed \(seed) picked \(leak.edge)")
+      }
+    }
+    XCTAssertTrue(sawALeak, "expected at least one of 200 seeds to trigger a 1998 light leak")
+  }
+
+  func testLightLeakRenderedAlphaNeverExceedsAlphaCap() throws {
+    let leakStage = try XCTUnwrap(FilmRecipeCatalog.nineteenNinetyEight.stages.lightLeak)
+    XCTAssertEqual(leakStage.alphaCap, 0.16, accuracy: 0.0001)
+
+    let decision = LightLeakDecision(
+      edge: .top, position: 0.5, width: leakStage.maxWidth, angle: 0,
+      color: LightLeakColor(red: 1, green: 1, blue: 1), intensity: leakStage.maxIntensity)
+    let extent = CGRect(x: 0, y: 0, width: 256, height: 192)
+    // Strength far above 1 pushes the raw formula well past the cap, so the
+    // clamp is what's actually being exercised here.
+    let overlay = try XCTUnwrap(
+      FilmProcessor.makeLightLeakImage(
+        extent: extent, decision: decision, strength: 10, alphaCap: leakStage.alphaCap))
+    let context = CIContext(options: [.useSoftwareRenderer: true])
+    let rendered = try XCTUnwrap(context.createCGImage(overlay, from: extent))
+    guard let data = rendered.dataProvider?.data, let pointer = CFDataGetBytePtr(data) else {
+      return XCTFail("no pixel data")
+    }
+    let bytesPerRow = rendered.bytesPerRow
+    var maxAlpha: UInt8 = 0
+    for y in 0..<rendered.height {
+      for x in 0..<rendered.width {
+        let offset = y * bytesPerRow + x * 4
+        maxAlpha = max(maxAlpha, pointer[offset + 3])
+      }
+    }
+    XCTAssertLessThanOrEqual(Double(maxAlpha) / 255.0, leakStage.alphaCap + 1.0 / 255.0)
   }
 
   func testRenderedOutputIsExactlyRepeatableForSameSeed() async throws {
@@ -372,6 +520,104 @@ final class FilmProcessorTests: XCTestCase {
     context.setFillColor(fill)
     context.fill(CGRect(x: 0, y: 0, width: width, height: height))
     return context.makeImage()
+  }
+
+  /// A mid-grey field with a solid white square, used to probe chromatic
+  /// aberration's per-channel radial scaling.
+  private func makeGreySquareImage(width: Int, height: Int, squareRect: CGRect) -> CGImage? {
+    let colorSpace = CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB()
+    guard
+      let context = CGContext(
+        data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: width * 4,
+        space: colorSpace,
+        bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+          | CGBitmapInfo.byteOrder32Big.rawValue)
+    else { return nil }
+    context.setFillColor(CGColor(red: 0.5, green: 0.5, blue: 0.5, alpha: 1))
+    context.fill(CGRect(x: 0, y: 0, width: width, height: height))
+    context.setFillColor(CGColor(red: 1, green: 1, blue: 1, alpha: 1))
+    context.fill(squareRect)
+    return context.makeImage()
+  }
+
+  /// The intensity-weighted centroid of pixels above `threshold` in one
+  /// channel, isolating a bright feature from a uniform background.
+  private func brightChannelCentroid(_ image: CGImage, channelOffset: Int, threshold: Double)
+    throws -> CGPoint
+  {
+    guard let providerData = image.dataProvider?.data,
+      let pointer = CFDataGetBytePtr(providerData)
+    else {
+      throw FilmProcessorError.renderFailed
+    }
+    let bytesPerRow = image.bytesPerRow
+    var sumWeight = 0.0
+    var sumX = 0.0
+    var sumY = 0.0
+    for y in 0..<image.height {
+      for x in 0..<image.width {
+        let offset = y * bytesPerRow + x * 4
+        let value = Double(pointer[offset + channelOffset]) / 255.0
+        guard value > threshold else { continue }
+        sumWeight += value
+        sumX += value * Double(x)
+        sumY += value * Double(y)
+      }
+    }
+    guard sumWeight > 0 else { throw FilmProcessorError.renderFailed }
+    return CGPoint(x: sumX / sumWeight, y: sumY / sumWeight)
+  }
+
+  /// A hard black/white step edge, used to measure blur width and isotropy.
+  private func makeEdgeImage(width: Int, height: Int, verticalEdge: Bool) -> CGImage? {
+    let colorSpace = CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB()
+    guard
+      let context = CGContext(
+        data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: width * 4,
+        space: colorSpace,
+        bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+          | CGBitmapInfo.byteOrder32Big.rawValue)
+    else { return nil }
+    context.setFillColor(CGColor(red: 0, green: 0, blue: 0, alpha: 1))
+    context.fill(CGRect(x: 0, y: 0, width: width, height: height))
+    context.setFillColor(CGColor(red: 1, green: 1, blue: 1, alpha: 1))
+    if verticalEdge {
+      context.fill(CGRect(x: width / 2, y: 0, width: width - width / 2, height: height))
+    } else {
+      context.fill(CGRect(x: 0, y: height / 2, width: width, height: height - height / 2))
+    }
+    return context.makeImage()
+  }
+
+  /// The pixel span, along the axis perpendicular to the edge, over which
+  /// the red channel climbs from 5% to 95% through the image's centre line.
+  private func transitionWidth(_ image: CGImage, verticalEdge: Bool) throws -> Int {
+    guard let providerData = image.dataProvider?.data,
+      let pointer = CFDataGetBytePtr(providerData)
+    else {
+      throw FilmProcessorError.renderFailed
+    }
+    let bytesPerRow = image.bytesPerRow
+    var values = [Double]()
+    if verticalEdge {
+      let y = image.height / 2
+      for x in 0..<image.width {
+        values.append(Double(pointer[y * bytesPerRow + x * 4]) / 255.0)
+      }
+    } else {
+      let x = image.width / 2
+      for y in 0..<image.height {
+        values.append(Double(pointer[y * bytesPerRow + x * 4]) / 255.0)
+      }
+    }
+    // Count samples strictly inside the transition band rather than locating
+    // ordered start/end indices: depending on edge orientation, the bitmap's
+    // row order can make the ramp run high-to-low instead of low-to-high
+    // (CGContext fills use a bottom-left origin while the resulting CGImage
+    // buffer is top-row-first), and an ordered-index search silently returns
+    // 0 for a decreasing ramp. Counting the band membership is direction-
+    // agnostic and still measures the same physical transition width.
+    return values.filter { $0 > 0.05 && $0 < 0.95 }.count
   }
 
   private func centrePixel(_ image: CGImage) throws -> FilmRGB {

@@ -221,10 +221,8 @@ extension AppModel {
     )
 
     for item in items where item.mediaType == .photo
-      && item.recipe.identifier == .nineteenNinetyEight
       && item.processing.phase == .ready
-      && (item.recipe.resolvedSettings.dateStampConfiguration != digitalConfiguration
-        || item.recipe.resolvedSettings.dateStampText?.contains(":") != true)
+      && item.recipe.needsLegacyTimestampMigration(to: digitalConfiguration)
     {
       guard !Task.isCancelled else { return }
       guard let originalURL = try? await mediaLibrary.assetURL(for: item, kind: .original),
@@ -301,7 +299,8 @@ extension AppModel {
       return try FilmProcessor.shared.encodedData(
         image,
         format: .jpeg,
-        quality: CGFloat(item.recipe.resolvedSettings.compressionQuality)
+        quality: CGFloat(item.recipe.resolvedSettings.compressionQuality),
+        metadataSource: sourceData
       )
     }.value
 
@@ -425,4 +424,18 @@ extension AppModel {
     return .unknown
   }
 
+}
+
+extension AppliedFilmRecipe {
+  /// The population `AppModel.migrateLegacyPhotoTimestamps()` re-renders:
+  /// 1998 captures whose monospaced stamp predates the digital date-time
+  /// format. Seven-segment (recipe version 3, Huji-style) captures persist a
+  /// `"M d 'yy"` stamp on purpose and their renderer has no `/` or `:` glyphs,
+  /// so they are never candidates.
+  func needsLegacyTimestampMigration(to digitalConfiguration: DateStampConfiguration) -> Bool {
+    guard identifier == .nineteenNinetyEight else { return false }
+    guard (stages.dateStamp?.style ?? .monospaced) == .monospaced else { return false }
+    return resolvedSettings.dateStampConfiguration != digitalConfiguration
+      || resolvedSettings.dateStampText?.contains(":") != true
+  }
 }

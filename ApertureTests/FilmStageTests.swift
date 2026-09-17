@@ -93,6 +93,63 @@ final class FilmStageTests: XCTestCase {
     }
   }
 
+  // MARK: 2b. Stage-schema-2 wire format keeps its rendering semantics
+
+  func testSchemaTwoChromaticAberrationAndHalationDecodeWithTheirOriginalSemantics() throws {
+    let decoder = ApertureJSON.makeDecoder()
+    let encoder = ApertureJSON.makeEncoder()
+
+    // Schema 2 persisted an unsigned `blueGain` that the renderer subtracted
+    // (`blueScale = 1 - 0.0042·a·s`). Schema 3 adds the gain, so the legacy
+    // key must decode negated, and a decode → encode → decode round trip must
+    // not flip it again.
+    let legacyCA = Data(
+      #"{"kind":"chromaticAberration","configuration":{"amount":0.5,"blueGain":0.0042,"redGain":0.0048}}"#
+        .utf8)
+    guard case .chromaticAberration(let ca) = try decoder.decode(FilmStage.self, from: legacyCA)
+    else { return XCTFail("Expected a chromatic aberration stage") }
+    XCTAssertEqual(ca.blueGain, -0.0042, accuracy: 1e-12)
+    XCTAssertEqual(ca.redGain, 0.0048, accuracy: 1e-12)
+    XCTAssertTrue(ca.seeded)
+
+    let reencoded = try encoder.encode(FilmStage.chromaticAberration(ca))
+    let json = try XCTUnwrap(
+      try JSONSerialization.jsonObject(with: reencoded) as? [String: Any])
+    let configuration = try XCTUnwrap(json["configuration"] as? [String: Any])
+    XCTAssertNil(configuration["blueGain"], "the unsigned legacy key must never be written again")
+    XCTAssertEqual(configuration["signedBlueGain"] as? Double ?? .nan, -0.0042, accuracy: 1e-12)
+    guard case .chromaticAberration(let roundTripped) = try decoder.decode(
+      FilmStage.self, from: reencoded)
+    else { return XCTFail("Expected a chromatic aberration stage") }
+    XCTAssertEqual(roundTripped, ca)
+
+    // A schema-3 payload carrying both keys prefers the signed one.
+    let mixed = Data(
+      #"{"kind":"chromaticAberration","configuration":{"amount":0.5,"blueGain":0.0042,"signedBlueGain":0.0032}}"#
+        .utf8)
+    guard case .chromaticAberration(let preferred) = try decoder.decode(FilmStage.self, from: mixed)
+    else { return XCTFail("Expected a chromatic aberration stage") }
+    XCTAssertEqual(preferred.blueGain, 0.0032, accuracy: 1e-12)
+
+    // Schema 2 persisted the halation tint as three loose warm gains; a
+    // non-default value must survive as `.warmByAmount`, not be replaced by
+    // the catalog default.
+    let legacyHalation = Data(
+      #"{"kind":"halation","configuration":{"amount":0.3,"warmRedGain":0.4,"warmBlueGain":0.05}}"#
+        .utf8)
+    guard case .halation(let halation) = try decoder.decode(FilmStage.self, from: legacyHalation)
+    else { return XCTFail("Expected a halation stage") }
+    XCTAssertEqual(halation.tint, .warmByAmount(red: 0.4, green: 0.04, blue: 0.05))
+    XCTAssertTrue(halation.radiusScalesWithAmount)
+
+    let explicitTint = Data(
+      #"{"kind":"halation","configuration":{"amount":0.3,"warmRedGain":0.4,"tint":{"fixed":{"red":1,"green":0.78,"blue":0.92}}}}"#
+        .utf8)
+    guard case .halation(let fixed) = try decoder.decode(FilmStage.self, from: explicitTint)
+    else { return XCTFail("Expected a halation stage") }
+    XCTAssertEqual(fixed.tint, .fixed(red: 1, green: 0.78, blue: 0.92))
+  }
+
   // MARK: 3. Partial-stage decode fills defaults; unknown kind throws
 
   func testStageDecodeFillsDefaultsForPartialConfigurationAndRejectsUnknownKind() throws {
@@ -110,9 +167,9 @@ final class FilmStageTests: XCTestCase {
     XCTAssertEqual(halationStage.intensityCap, 1)
     XCTAssertEqual(halationStage.radiusScale, 0.012)
     XCTAssertEqual(halationStage.minimumRadius, 1)
-    XCTAssertEqual(halationStage.warmRedGain, 0.20)
-    XCTAssertEqual(halationStage.warmGreenGain, 0.04)
-    XCTAssertEqual(halationStage.warmBlueGain, 0.10)
+    XCTAssertEqual(
+      halationStage.tint, .warmByAmount(red: 0.20, green: 0.04, blue: 0.10))
+    XCTAssertEqual(halationStage.radiusScalesWithAmount, true)
     XCTAssertEqual(halationStage.blendOpacityScale, 0.82)
     XCTAssertEqual(halationStage.blendOpacityCap, 0.68)
 
@@ -131,6 +188,8 @@ final class FilmStageTests: XCTestCase {
     XCTAssertEqual(leakStage.minIntensity, 0.68)
     XCTAssertEqual(leakStage.maxIntensity, 1.0)
     XCTAssertEqual(leakStage.palette, LightLeakStage.defaultPalette)
+    XCTAssertEqual(leakStage.edges, LightLeakDecision.Edge.allCases)
+    XCTAssertEqual(leakStage.alphaCap, 0.68)
 
     let partialDateStamp = Data(#"{"kind":"dateStamp","configuration":{}}"#.utf8)
     guard case .dateStamp(let dateStampStage) = try decoder.decode(
@@ -232,44 +291,107 @@ final class FilmStageTests: XCTestCase {
     let mean: Double
     let standardDeviation: Double
     let redMean: Double
+    /// Mean per-pixel HSV saturation.
+    let saturation: Double
+    /// Fraction of pixels whose brightest channel is at or below 5/255.
+    let blackClip: Double
+  }
+
+  private struct ReferenceKey: Hashable {
+    let recipe: FilmRecipeIdentifier
+    let fixture: String
   }
 
   /// Coarse, renderer-tolerant characterization of every catalog recipe
-  /// against a fixed fixture/seed. `GoldenRenderTests` is the exact
-  /// pixel-identity contract for the #17 refactor; this is a looser,
-  /// independent guard so an unrelated future change to a stage's numbers
-  /// is caught even where a byte-exact golden isn't in play.
-  private let referenceStatistics: [FilmRecipeIdentifier: ReferenceStatistics] = [
-    .nineteenNinetyEight: ReferenceStatistics(
-      mean: 0.5075, standardDeviation: 0.3309, redMean: 0.5467),
-    .night: ReferenceStatistics(mean: 0.4637, standardDeviation: 0.3341, redMean: 0.4914),
-    .cinema: ReferenceStatistics(mean: 0.5476, standardDeviation: 0.2856, redMean: 0.5642),
-    .legacyOriginal: ReferenceStatistics(mean: 0.4247, standardDeviation: 0.2533, redMean: 0.4417),
+  /// against each fixture at a fixed seed. `GoldenRenderTests` is the exact
+  /// pixel-identity contract; this is a looser, independent guard so an
+  /// unrelated future change to a stage's numbers is caught even where a
+  /// byte-exact golden isn't in play. Regenerate the table by running with
+  /// `APERTURE_DUMP_REFERENCE_STATS=1` and pasting the printed rows.
+  private let referenceStatistics: [ReferenceKey: ReferenceStatistics] = [
+    ReferenceKey(recipe: .nineteenNinetyEight, fixture: "day-portrait"): ReferenceStatistics(
+      mean: 0.4664, standardDeviation: 0.3083, redMean: 0.5063, saturation: 0.4113,
+      blackClip: 0.0265),
+    ReferenceKey(recipe: .night, fixture: "day-portrait"): ReferenceStatistics(
+      mean: 0.4637, standardDeviation: 0.3341, redMean: 0.4914, saturation: 0.4300,
+      blackClip: 0.0712),
+    ReferenceKey(recipe: .cinema, fixture: "day-portrait"): ReferenceStatistics(
+      mean: 0.5476, standardDeviation: 0.2856, redMean: 0.5642, saturation: 0.2634,
+      blackClip: 0.0017),
+    ReferenceKey(recipe: .legacyOriginal, fixture: "day-portrait"): ReferenceStatistics(
+      mean: 0.4247, standardDeviation: 0.2533, redMean: 0.4417, saturation: 0.3146,
+      blackClip: 0.0015),
+    ReferenceKey(recipe: .nineteenNinetyEight, fixture: "night-flash"): ReferenceStatistics(
+      mean: 0.1873, standardDeviation: 0.2530, redMean: 0.2499, saturation: 0.4170,
+      blackClip: 0.3253),
+    ReferenceKey(recipe: .night, fixture: "night-flash"): ReferenceStatistics(
+      mean: 0.1720, standardDeviation: 0.2669, redMean: 0.2297, saturation: 0.2908,
+      blackClip: 0.4850),
+    ReferenceKey(recipe: .cinema, fixture: "night-flash"): ReferenceStatistics(
+      mean: 0.2566, standardDeviation: 0.2565, redMean: 0.3000, saturation: 0.3139,
+      blackClip: 0.0872),
+    ReferenceKey(recipe: .legacyOriginal, fixture: "night-flash"): ReferenceStatistics(
+      mean: 0.1932, standardDeviation: 0.1953, redMean: 0.2339, saturation: 0.3267,
+      blackClip: 0.0777),
+    ReferenceKey(recipe: .nineteenNinetyEight, fixture: "hdr-still-life"): ReferenceStatistics(
+      mean: 0.3811, standardDeviation: 0.3216, redMean: 0.4552, saturation: 0.5430,
+      blackClip: 0.1131),
+    ReferenceKey(recipe: .night, fixture: "hdr-still-life"): ReferenceStatistics(
+      mean: 0.3716, standardDeviation: 0.3454, redMean: 0.4399, saturation: 0.5149,
+      blackClip: 0.1624),
+    ReferenceKey(recipe: .cinema, fixture: "hdr-still-life"): ReferenceStatistics(
+      mean: 0.4414, standardDeviation: 0.3237, redMean: 0.5023, saturation: 0.4806,
+      blackClip: 0.0294),
+    ReferenceKey(recipe: .legacyOriginal, fixture: "hdr-still-life"): ReferenceStatistics(
+      mean: 0.3388, standardDeviation: 0.2689, redMean: 0.3903, saturation: 0.5576,
+      blackClip: 0.0233),
   ]
 
   func testPerRecipeReferenceStatisticsStayWithinTolerance() async throws {
     let tolerance = 0.015
+    let dump = ProcessInfo.processInfo.environment["APERTURE_DUMP_REFERENCE_STATS"] != nil
     let processor = FilmProcessor(context: CIContext(options: [.useSoftwareRenderer: true]))
     let date = Date(timeIntervalSince1970: 893_980_800)
     let options = FilmProcessingOptions(
       lightLeaksEnabled: false, dateStamp: .off)
-    let source = try fixtureCGImage(named: "day-portrait")
 
-    for recipe in FilmRecipeCatalog.all + [FilmRecipeCatalog.legacyOriginal] {
-      let applied = recipe.resolve(seed: 4_242, capturedAt: date, options: options, timeZone: .gmt)
-      let rendered = try await processor.renderedCGImage(
-        CIImage(cgImage: source), recipe: applied, renderSize: .preview(maxPixelDimension: 128))
-      let stats = try pixelStatistics(rendered)
-      let reference = try XCTUnwrap(
-        referenceStatistics[recipe.id], "missing reference for \(recipe.displayName)")
+    for fixture in ["day-portrait", "night-flash", "hdr-still-life"] {
+      let source = try fixtureCGImage(named: fixture)
+      for recipe in FilmRecipeCatalog.all + [FilmRecipeCatalog.legacyOriginal] {
+        let applied = recipe.resolve(
+          seed: 4_242, capturedAt: date, options: options, timeZone: .gmt)
+        let rendered = try await processor.renderedCGImage(
+          CIImage(cgImage: source), recipe: applied, renderSize: .preview(maxPixelDimension: 128))
+        let stats = try pixelStatistics(rendered)
+        if dump {
+          print(
+            String(
+              format: "    ReferenceKey(recipe: .%@, fixture: \"%@\"): ReferenceStatistics(\n"
+                + "      mean: %.4f, standardDeviation: %.4f, redMean: %.4f, saturation: %.4f,\n"
+                + "      blackClip: %.4f),",
+              [
+                FilmRecipeIdentifier.nineteenNinetyEight: "nineteenNinetyEight",
+                .night: "night", .cinema: "cinema", .legacyOriginal: "legacyOriginal",
+              ][recipe.id] ?? recipe.id.rawValue, fixture,
+              stats.mean, stats.standardDeviation, stats.redMean, stats.saturation,
+              stats.blackClip))
+          continue
+        }
+        let label = "\(recipe.displayName)/\(fixture)"
+        let reference = try XCTUnwrap(
+          referenceStatistics[ReferenceKey(recipe: recipe.id, fixture: fixture)],
+          "missing reference for \(label)")
 
-      XCTAssertEqual(
-        stats.mean, reference.mean, accuracy: tolerance, "\(recipe.displayName) mean")
-      XCTAssertEqual(
-        stats.standardDeviation, reference.standardDeviation, accuracy: tolerance,
-        "\(recipe.displayName) standardDeviation")
-      XCTAssertEqual(
-        stats.redMean, reference.redMean, accuracy: tolerance, "\(recipe.displayName) redMean")
+        XCTAssertEqual(stats.mean, reference.mean, accuracy: tolerance, "\(label) mean")
+        XCTAssertEqual(
+          stats.standardDeviation, reference.standardDeviation, accuracy: tolerance,
+          "\(label) standardDeviation")
+        XCTAssertEqual(stats.redMean, reference.redMean, accuracy: tolerance, "\(label) redMean")
+        XCTAssertEqual(
+          stats.saturation, reference.saturation, accuracy: tolerance, "\(label) saturation")
+        XCTAssertEqual(
+          stats.blackClip, reference.blackClip, accuracy: tolerance, "\(label) blackClip")
+      }
     }
   }
 
@@ -325,6 +447,8 @@ final class FilmStageTests: XCTestCase {
     let mean: Double
     let standardDeviation: Double
     let redMean: Double
+    let saturation: Double
+    let blackClip: Double
   }
 
   private func pixelStatistics(_ image: CGImage) throws -> PixelStatistics {
@@ -334,23 +458,32 @@ final class FilmStageTests: XCTestCase {
       throw FilmProcessorError.renderFailed
     }
     let count = image.width * image.height
+    let bytesPerRow = image.bytesPerRow
     var luminances = [Double]()
-    var reds = [Double]()
     luminances.reserveCapacity(count)
-    reds.reserveCapacity(count)
-    for index in 0..<count {
-      let offset = index * 4
-      let red = Double(pointer[offset]) / 255
-      let green = Double(pointer[offset + 1]) / 255
-      let blue = Double(pointer[offset + 2]) / 255
-      luminances.append((red + green + blue) / 3)
-      reds.append(red)
+    var redSum = 0.0
+    var saturationSum = 0.0
+    var clipped = 0
+    for y in 0..<image.height {
+      for x in 0..<image.width {
+        let offset = y * bytesPerRow + x * 4
+        let red = Double(pointer[offset]) / 255
+        let green = Double(pointer[offset + 1]) / 255
+        let blue = Double(pointer[offset + 2]) / 255
+        luminances.append((red + green + blue) / 3)
+        redSum += red
+        let brightest = max(red, green, blue)
+        let darkest = min(red, green, blue)
+        saturationSum += brightest > 0 ? (brightest - darkest) / brightest : 0
+        if brightest <= 5.0 / 255 { clipped += 1 }
+      }
     }
     let mean = luminances.reduce(0, +) / Double(count)
-    let redMean = reds.reduce(0, +) / Double(count)
     let variance =
       luminances.reduce(0) { partial, value in partial + (value - mean) * (value - mean) }
       / Double(count)
-    return PixelStatistics(mean: mean, standardDeviation: variance.squareRoot(), redMean: redMean)
+    return PixelStatistics(
+      mean: mean, standardDeviation: variance.squareRoot(), redMean: redSum / Double(count),
+      saturation: saturationSum / Double(count), blackClip: Double(clipped) / Double(count))
   }
 }

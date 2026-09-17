@@ -70,7 +70,7 @@ enum PhotoQualityPreference: String, Codable, CaseIterable, Hashable, Sendable {
   var compressionQuality: Double {
     switch self {
     case .spaceSaving: 0.72
-    case .balanced: 0.88
+    case .balanced: 0.92
     case .maximum: 0.97
     }
   }

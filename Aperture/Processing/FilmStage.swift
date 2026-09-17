@@ -81,17 +81,28 @@ extension FilmStage: Codable {
   }
 }
 
-/// Bloom/halation around bright areas, warmed slightly and blended back in.
+/// Bloom/halation around bright areas, tinted and blended back in.
 struct HalationStage: Codable, Hashable, Sendable {
+  /// How the bloom highlight is tinted before it's blended back in.
+  enum Tint: Codable, Hashable, Sendable {
+    /// Reproduces the original warm-halation matrix
+    /// `(1 + red·amount, 1 + green·amount, 1 − blue·amount)`.
+    case warmByAmount(red: Double, green: Double, blue: Double)
+    /// Sets the bloom's colour-matrix diagonal directly, independent of amount.
+    case fixed(red: Double, green: Double, blue: Double)
+  }
+
   var amount: Double
   var minimumAmount: Double = 0.001
   var intensityScale: Double = 0.75
   var intensityCap: Double = 1
   var radiusScale: Double = 0.012
   var minimumRadius: Double = 1
-  var warmRedGain: Double = 0.20
-  var warmGreenGain: Double = 0.04
-  var warmBlueGain: Double = 0.10
+  var tint: Tint = .warmByAmount(red: 0.20, green: 0.04, blue: 0.10)
+  /// When true (the default), the bloom radius also scales with `amount`,
+  /// matching the original `extent.width * radiusScale * amount` formula.
+  /// When false, the radius is `max(minimumRadius, extent.width * radiusScale)`.
+  var radiusScalesWithAmount: Bool = true
   var blendOpacityScale: Double = 0.82
   var blendOpacityCap: Double = 0.68
 
@@ -102,9 +113,8 @@ struct HalationStage: Codable, Hashable, Sendable {
     intensityCap: Double = 1,
     radiusScale: Double = 0.012,
     minimumRadius: Double = 1,
-    warmRedGain: Double = 0.20,
-    warmGreenGain: Double = 0.04,
-    warmBlueGain: Double = 0.10,
+    tint: Tint = .warmByAmount(red: 0.20, green: 0.04, blue: 0.10),
+    radiusScalesWithAmount: Bool = true,
     blendOpacityScale: Double = 0.82,
     blendOpacityCap: Double = 0.68
   ) {
@@ -114,20 +124,34 @@ struct HalationStage: Codable, Hashable, Sendable {
     self.intensityCap = intensityCap
     self.radiusScale = radiusScale
     self.minimumRadius = minimumRadius
-    self.warmRedGain = warmRedGain
-    self.warmGreenGain = warmGreenGain
-    self.warmBlueGain = warmBlueGain
+    self.tint = tint
+    self.radiusScalesWithAmount = radiusScalesWithAmount
     self.blendOpacityScale = blendOpacityScale
     self.blendOpacityCap = blendOpacityCap
   }
 
   private enum CodingKeys: String, CodingKey {
     case amount, minimumAmount, intensityScale, intensityCap, radiusScale, minimumRadius
-    case warmRedGain, warmGreenGain, warmBlueGain, blendOpacityScale, blendOpacityCap
+    case tint, radiusScalesWithAmount, blendOpacityScale, blendOpacityCap
+  }
+
+  /// Stage-schema-2 manifests persisted the warm tint as three loose gains.
+  private enum LegacyCodingKeys: String, CodingKey {
+    case warmRedGain, warmGreenGain, warmBlueGain
   }
 
   init(from decoder: Decoder) throws {
     let values = try decoder.container(keyedBy: CodingKeys.self)
+    let tint: Tint
+    if let persisted = try values.decodeIfPresent(Tint.self, forKey: .tint) {
+      tint = persisted
+    } else {
+      let legacyValues = try decoder.container(keyedBy: LegacyCodingKeys.self)
+      tint = .warmByAmount(
+        red: try legacyValues.decodeIfPresent(Double.self, forKey: .warmRedGain) ?? 0.20,
+        green: try legacyValues.decodeIfPresent(Double.self, forKey: .warmGreenGain) ?? 0.04,
+        blue: try legacyValues.decodeIfPresent(Double.self, forKey: .warmBlueGain) ?? 0.10)
+    }
     self.init(
       amount: try values.decode(Double.self, forKey: .amount),
       minimumAmount: try values.decodeIfPresent(Double.self, forKey: .minimumAmount) ?? 0.001,
@@ -135,17 +159,24 @@ struct HalationStage: Codable, Hashable, Sendable {
       intensityCap: try values.decodeIfPresent(Double.self, forKey: .intensityCap) ?? 1,
       radiusScale: try values.decodeIfPresent(Double.self, forKey: .radiusScale) ?? 0.012,
       minimumRadius: try values.decodeIfPresent(Double.self, forKey: .minimumRadius) ?? 1,
-      warmRedGain: try values.decodeIfPresent(Double.self, forKey: .warmRedGain) ?? 0.20,
-      warmGreenGain: try values.decodeIfPresent(Double.self, forKey: .warmGreenGain) ?? 0.04,
-      warmBlueGain: try values.decodeIfPresent(Double.self, forKey: .warmBlueGain) ?? 0.10,
+      tint: tint,
+      radiusScalesWithAmount: try values.decodeIfPresent(
+        Bool.self, forKey: .radiusScalesWithAmount) ?? true,
       blendOpacityScale: try values.decodeIfPresent(Double.self, forKey: .blendOpacityScale) ?? 0.82,
       blendOpacityCap: try values.decodeIfPresent(Double.self, forKey: .blendOpacityCap) ?? 0.68
     )
   }
 }
 
-/// A soft-focus feel: a mild zoom blur, strongest away from frame centre.
+/// A soft-focus feel: either a mild zoom blur strongest away from frame
+/// centre (`.radialZoom`, the original look), or an isotropic Gaussian blur
+/// scaled by the shortest side (`.gaussian`).
 struct SoftnessStage: Codable, Hashable, Sendable {
+  enum Kind: String, Codable, Hashable, Sendable {
+    case radialZoom
+    case gaussian
+  }
+
   var amount: Double
   var minimumAmount: Double = 0.001
   var zoomBlurScale: Double = 0.0026
@@ -153,6 +184,8 @@ struct SoftnessStage: Codable, Hashable, Sendable {
   var outerRadiusScale: Double = 0.78
   var fallbackBlendOpacityScale: Double = 0.55
   var fallbackBlendOpacityCap: Double = 0.42
+  var kind: Kind = .radialZoom
+  var gaussianRadiusScale: Double = 0.0004
 
   init(
     amount: Double,
@@ -161,7 +194,9 @@ struct SoftnessStage: Codable, Hashable, Sendable {
     innerRadiusScale: Double = 0.38,
     outerRadiusScale: Double = 0.78,
     fallbackBlendOpacityScale: Double = 0.55,
-    fallbackBlendOpacityCap: Double = 0.42
+    fallbackBlendOpacityCap: Double = 0.42,
+    kind: Kind = .radialZoom,
+    gaussianRadiusScale: Double = 0.0004
   ) {
     self.amount = amount
     self.minimumAmount = minimumAmount
@@ -170,11 +205,13 @@ struct SoftnessStage: Codable, Hashable, Sendable {
     self.outerRadiusScale = outerRadiusScale
     self.fallbackBlendOpacityScale = fallbackBlendOpacityScale
     self.fallbackBlendOpacityCap = fallbackBlendOpacityCap
+    self.kind = kind
+    self.gaussianRadiusScale = gaussianRadiusScale
   }
 
   private enum CodingKeys: String, CodingKey {
     case amount, minimumAmount, zoomBlurScale, innerRadiusScale, outerRadiusScale
-    case fallbackBlendOpacityScale, fallbackBlendOpacityCap
+    case fallbackBlendOpacityScale, fallbackBlendOpacityCap, kind, gaussianRadiusScale
   }
 
   init(from decoder: Decoder) throws {
@@ -188,7 +225,10 @@ struct SoftnessStage: Codable, Hashable, Sendable {
       fallbackBlendOpacityScale: try values.decodeIfPresent(
         Double.self, forKey: .fallbackBlendOpacityScale) ?? 0.55,
       fallbackBlendOpacityCap: try values.decodeIfPresent(
-        Double.self, forKey: .fallbackBlendOpacityCap) ?? 0.42
+        Double.self, forKey: .fallbackBlendOpacityCap) ?? 0.42,
+      kind: try values.decodeIfPresent(Kind.self, forKey: .kind) ?? .radialZoom,
+      gaussianRadiusScale: try values.decodeIfPresent(
+        Double.self, forKey: .gaussianRadiusScale) ?? 0.0004
     )
   }
 }
@@ -198,36 +238,68 @@ struct ChromaticAberrationStage: Codable, Hashable, Sendable {
   var amount: Double
   var minimumAmount: Double = 0.0005
   var redGain: Double = 0.0048
-  var blueGain: Double = 0.0042
+  /// Signed gain applied as `blueScale = 1 + blueGain * amount * shift`. The
+  /// default is negative so the v1 look (blue shrinking, i.e. `1 - 0.0042 *
+  /// amount * shift`) is unchanged.
+  var blueGain: Double = -0.0042
   var lateralShiftScale: Double = 0.00045
+  /// When true (the default), the per-render seed drives the red/blue channel
+  /// shift amounts and shift direction. When false, both channel shifts are
+  /// fixed at 1 and the direction is always positive, so the render is fully
+  /// deterministic across seeds.
+  var seeded: Bool = true
 
   init(
     amount: Double,
     minimumAmount: Double = 0.0005,
     redGain: Double = 0.0048,
-    blueGain: Double = 0.0042,
-    lateralShiftScale: Double = 0.00045
+    blueGain: Double = -0.0042,
+    lateralShiftScale: Double = 0.00045,
+    seeded: Bool = true
   ) {
     self.amount = amount
     self.minimumAmount = minimumAmount
     self.redGain = redGain
     self.blueGain = blueGain
     self.lateralShiftScale = lateralShiftScale
+    self.seeded = seeded
   }
 
+  /// `blueGain` is persisted under `signedBlueGain`. Stage-schema-2
+  /// manifests wrote an unsigned `blueGain` that the renderer *subtracted*
+  /// (`1 - blueGain * amount * shift`); decoding negates that legacy key so
+  /// the persisted look is unchanged, and re-encoding only ever writes the
+  /// signed key, so a decode/encode round trip cannot flip the sign twice.
   private enum CodingKeys: String, CodingKey {
-    case amount, minimumAmount, redGain, blueGain, lateralShiftScale
+    case amount, minimumAmount, redGain, lateralShiftScale, seeded
+    case blueGain = "signedBlueGain"
+  }
+
+  private enum LegacyCodingKeys: String, CodingKey {
+    case unsignedBlueGain = "blueGain"
   }
 
   init(from decoder: Decoder) throws {
     let values = try decoder.container(keyedBy: CodingKeys.self)
+    let legacyValues = try decoder.container(keyedBy: LegacyCodingKeys.self)
+    let blueGain: Double
+    if let signed = try values.decodeIfPresent(Double.self, forKey: .blueGain) {
+      blueGain = signed
+    } else if let unsigned = try legacyValues.decodeIfPresent(
+      Double.self, forKey: .unsignedBlueGain)
+    {
+      blueGain = -unsigned
+    } else {
+      blueGain = -0.0042
+    }
     self.init(
       amount: try values.decode(Double.self, forKey: .amount),
       minimumAmount: try values.decodeIfPresent(Double.self, forKey: .minimumAmount) ?? 0.0005,
       redGain: try values.decodeIfPresent(Double.self, forKey: .redGain) ?? 0.0048,
-      blueGain: try values.decodeIfPresent(Double.self, forKey: .blueGain) ?? 0.0042,
+      blueGain: blueGain,
       lateralShiftScale: try values.decodeIfPresent(Double.self, forKey: .lateralShiftScale)
-        ?? 0.00045
+        ?? 0.00045,
+      seeded: try values.decodeIfPresent(Bool.self, forKey: .seeded) ?? true
     )
   }
 }
@@ -302,6 +374,13 @@ struct LightLeakStage: Codable, Hashable, Sendable {
   var minIntensity: Double = 0.68
   var maxIntensity: Double = 1.0
   var palette: [LightLeakColor] = LightLeakStage.defaultPalette
+  /// Which edges a leak may be drawn from. An empty array means all four
+  /// (left, right, top, bottom, in that order), the same set and order
+  /// `FilmProcessingDecision.make` always drew from before this field existed
+  /// -- so the default reproduces identical draws for identical seeds.
+  var edges: [LightLeakDecision.Edge] = LightLeakDecision.Edge.allCases
+  /// Hard ceiling on the rendered leak's per-pixel alpha.
+  var alphaCap: Double = 0.68
 
   static let defaultPalette: [LightLeakColor] = [
     LightLeakColor(red: 1.0, green: 0.20, blue: 0.06),
@@ -321,7 +400,9 @@ struct LightLeakStage: Codable, Hashable, Sendable {
     maxAngle: Double = 0.42,
     minIntensity: Double = 0.68,
     maxIntensity: Double = 1.0,
-    palette: [LightLeakColor] = LightLeakStage.defaultPalette
+    palette: [LightLeakColor] = LightLeakStage.defaultPalette,
+    edges: [LightLeakDecision.Edge] = LightLeakDecision.Edge.allCases,
+    alphaCap: Double = 0.68
   ) {
     // Normalise so a hand-edited or corrupt manifest can never trap the
     // renderer: reversed ranges are swapped, non-finite bounds fall back to
@@ -335,6 +416,11 @@ struct LightLeakStage: Codable, Hashable, Sendable {
     (self.minIntensity, self.maxIntensity) = Self.ordered(
       minIntensity, maxIntensity, fallback: (0.68, 1.0))
     self.palette = palette.isEmpty ? LightLeakStage.defaultPalette : palette
+    // `edges` restricts which of the four sides a leak may be drawn from
+    // (issue #18's 1998 retune); an empty array falls back to all four so a
+    // corrupt or hand-edited manifest can't suppress every leak.
+    self.edges = edges.isEmpty ? LightLeakDecision.Edge.allCases : edges
+    self.alphaCap = Self.unit(alphaCap)
   }
 
   private static func unit(_ value: Double) -> Double {
@@ -351,7 +437,7 @@ struct LightLeakStage: Codable, Hashable, Sendable {
 
   private enum CodingKeys: String, CodingKey {
     case probability, strength, minWidth, maxWidth, minPosition, maxPosition
-    case minAngle, maxAngle, minIntensity, maxIntensity, palette
+    case minAngle, maxAngle, minIntensity, maxIntensity, palette, edges, alphaCap
   }
 
   init(from decoder: Decoder) throws {
@@ -368,7 +454,10 @@ struct LightLeakStage: Codable, Hashable, Sendable {
       minIntensity: try values.decodeIfPresent(Double.self, forKey: .minIntensity) ?? 0.68,
       maxIntensity: try values.decodeIfPresent(Double.self, forKey: .maxIntensity) ?? 1.0,
       palette: try values.decodeIfPresent([LightLeakColor].self, forKey: .palette)
-        ?? LightLeakStage.defaultPalette
+        ?? LightLeakStage.defaultPalette,
+      edges: try values.decodeIfPresent([LightLeakDecision.Edge].self, forKey: .edges)
+        ?? LightLeakDecision.Edge.allCases,
+      alphaCap: try values.decodeIfPresent(Double.self, forKey: .alphaCap) ?? 0.68
     )
   }
 }
@@ -415,27 +504,75 @@ struct VignetteStage: Codable, Hashable, Sendable {
   }
 }
 
-/// The persisted date-stamp overlay. `style` only ever renders one look
-/// today; it exists so a future recipe can request a different treatment
-/// without changing the render call sites.
+/// The persisted date-stamp overlay. `style` selects a rendering treatment;
+/// the geometry/colour fields below are only consumed by `.sevenSegment` —
+/// `.monospaced` ignores them and keeps its own hard-coded look so existing
+/// renders stay byte-identical.
 struct DateStampStage: Codable, Hashable, Sendable {
   enum Style: String, Codable, Hashable, Sendable {
     case monospaced
+    case sevenSegment
   }
 
   var style: Style = .monospaced
+  var red: Double = 193.0 / 255
+  var green: Double = 81.0 / 255
+  var blue: Double = 17.0 / 255
+  var alpha: Double = 0.95
+  /// × font size.
+  var glowRadiusScale: Double = 0.25
+  var glowAlpha: Double = 0.5
+  /// × shortest canvas side.
+  var fontSizeScale: Double = 0.028
+  /// × shortest canvas side; distance from the left edge in portrait / the
+  /// right edge in landscape.
+  var edgeMarginScale: Double = 0.035
+  /// × shortest canvas side; distance from the bottom edge.
+  var endMarginScale: Double = 0.11
 
-  init(style: Style = .monospaced) {
+  init(
+    style: Style = .monospaced,
+    red: Double = 193.0 / 255,
+    green: Double = 81.0 / 255,
+    blue: Double = 17.0 / 255,
+    alpha: Double = 0.95,
+    glowRadiusScale: Double = 0.25,
+    glowAlpha: Double = 0.5,
+    fontSizeScale: Double = 0.028,
+    edgeMarginScale: Double = 0.035,
+    endMarginScale: Double = 0.11
+  ) {
     self.style = style
+    self.red = red
+    self.green = green
+    self.blue = blue
+    self.alpha = alpha
+    self.glowRadiusScale = glowRadiusScale
+    self.glowAlpha = glowAlpha
+    self.fontSizeScale = fontSizeScale
+    self.edgeMarginScale = edgeMarginScale
+    self.endMarginScale = endMarginScale
   }
 
   private enum CodingKeys: String, CodingKey {
-    case style
+    case style, red, green, blue, alpha, glowRadiusScale, glowAlpha, fontSizeScale,
+      edgeMarginScale, endMarginScale
   }
 
   init(from decoder: Decoder) throws {
     let values = try decoder.container(keyedBy: CodingKeys.self)
-    self.init(style: try values.decodeIfPresent(Style.self, forKey: .style) ?? .monospaced)
+    self.init(
+      style: try values.decodeIfPresent(Style.self, forKey: .style) ?? .monospaced,
+      red: try values.decodeIfPresent(Double.self, forKey: .red) ?? 193.0 / 255,
+      green: try values.decodeIfPresent(Double.self, forKey: .green) ?? 81.0 / 255,
+      blue: try values.decodeIfPresent(Double.self, forKey: .blue) ?? 17.0 / 255,
+      alpha: try values.decodeIfPresent(Double.self, forKey: .alpha) ?? 0.95,
+      glowRadiusScale: try values.decodeIfPresent(Double.self, forKey: .glowRadiusScale) ?? 0.25,
+      glowAlpha: try values.decodeIfPresent(Double.self, forKey: .glowAlpha) ?? 0.5,
+      fontSizeScale: try values.decodeIfPresent(Double.self, forKey: .fontSizeScale) ?? 0.028,
+      edgeMarginScale: try values.decodeIfPresent(Double.self, forKey: .edgeMarginScale) ?? 0.035,
+      endMarginScale: try values.decodeIfPresent(Double.self, forKey: .endMarginScale) ?? 0.11
+    )
   }
 }
 
@@ -519,7 +656,10 @@ extension Array where Element == FilmStage {
         (0...1).contains(grade.highlightRolloff),
         (0...1).contains(grade.shadowCoolness),
         (0...1).contains(grade.channelSplit),
-        (0...1).contains(grade.blackCrush)
+        (0...1).contains(grade.blackCrush),
+        (0...1).contains(grade.blueGreenSuppression),
+        (0...1).contains(grade.blueDarken),
+        (0...1).contains(grade.redHueShift)
       else { return false }
     }
     if let halation, !(0...1).contains(halation.amount) { return false }
