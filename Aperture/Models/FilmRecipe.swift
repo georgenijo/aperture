@@ -223,6 +223,11 @@ struct FilmRecipe: Codable, Hashable, Identifiable, Sendable {
         leakStage.strength =
           leakEnabled ? Self.clampUnit(leakStage.strength * (leakStrengthScale ?? 1)) : 0
         return .lightLeak(leakStage)
+      // `.filmResponse` is deliberately left untouched: the fitted response
+      // is the measured look, so 1998 no longer gets the per-shot
+      // exposure/warmth jitter the parametric grade had. Grain and leak
+      // variation still come from the seed. The jitter draws above are kept
+      // so the RNG sequence, and therefore grain/leak decisions, is unchanged.
       default:
         return stage
       }

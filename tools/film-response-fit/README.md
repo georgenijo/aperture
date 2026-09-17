@@ -59,7 +59,10 @@ The reference pairs are two shots of one dark desk scene. A free LUT (or an
 unconstrained fit of this model) collapses outside that data: it crushed
 red and green above the midtones, painted neutrals magenta, and treated the
 moved hand as a colour transform. The priors in `fit.py` encode what the
-data cannot: highlights end at white, per-channel curves stay close to one
-shared S-curve, neutrals stay warm rather than magenta, hue bands with no
-samples stay at zero, and the fit is anchored by skin and region medians
+data cannot: highlights end at white (the top knots are pinned), per-channel curves
+are a shared S-curve plus a red offset, a non-negative red-minus-blue term
+and a small non-negative green-above-mean term (so greys cannot go cool or
+magenta by construction; a green cast is only bounded, and the shipping gate
+for greys is `testGreyRampStaysNeutralToWarmUnderTheFittedResponse`), hue
+bands with no samples stay at zero, and the fit is anchored by skin and region medians
 measured separately in each image so misalignment cannot bias them.
