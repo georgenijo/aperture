@@ -14,6 +14,17 @@ enum FilmColorCube {
     FilmColorModel.cubeData(dimension: dimension, grade: grade)
   }
 
+  static func data(response: FilmResponseStage) -> Data {
+    FilmResponseModel.cubeData(dimension: dimension, response: response)
+  }
+
+  /// The cube for whichever colour stage a recipe carries. A recipe with
+  /// both uses the fitted response; one with neither grades as identity.
+  static func data(for recipe: AppliedFilmRecipe) -> Data {
+    if let response = recipe.filmResponse { return data(response: response) }
+    return data(grade: recipe.colorGrade)
+  }
+
   private static let sRGB = CGColorSpace(name: CGColorSpace.sRGB)
 
   static func apply(_ image: CIImage, cubeData: Data, extent: CGRect) -> CIImage {
@@ -31,6 +42,12 @@ enum FilmColorCube {
 extension FilmProcessor {
   func applyColorGrade(_ image: CIImage, grade: FilmColorGrade, extent: CGRect) -> CIImage {
     FilmColorCube.apply(image, cubeData: FilmColorCube.data(grade: grade), extent: extent)
+  }
+
+  func applyFilmResponse(_ image: CIImage, response: FilmResponseStage, extent: CGRect)
+    -> CIImage
+  {
+    FilmColorCube.apply(image, cubeData: FilmColorCube.data(response: response), extent: extent)
   }
 
   func applyHalation(_ image: CIImage, stage: HalationStage, extent: CGRect) -> CIImage {

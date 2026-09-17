@@ -49,6 +49,7 @@
 		A10000010000000000000029 /* CameraControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000020000000000000031 /* CameraControls.swift */; };
 		A1000001000000000000002A /* FilmProcessor+Effects.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000020000000000000032 /* FilmProcessor+Effects.swift */; };
 		A10000010000000000000C1 /* FilmColorModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000020000000000000C1 /* FilmColorModel.swift */; };
+		A10000010000000000000F1 /* FilmResponse.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000020000000000000F1 /* FilmResponse.swift */; };
 		ADD7988EA7294DC5AC0DCC36 /* FilmStage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F8568F086924B49A873C9CB /* FilmStage.swift */; };
 		A1000001000000000000002B /* FilmProcessor+Rasterization.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000020000000000000033 /* FilmProcessor+Rasterization.swift */; };
 		A1000001000000000000002C /* FilmProcessor+Overlays.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000020000000000000034 /* FilmProcessor+Overlays.swift */; };
@@ -58,6 +59,7 @@
 		B100000100000000000000A1 /* AppModelRecoveryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B100000200000000000000A1 /* AppModelRecoveryTests.swift */; };
 		B10000010000000000000002 /* FilmProcessorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000020000000000000002 /* FilmProcessorTests.swift */; };
 		B10000010000000000000C1 /* FilmColorModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000020000000000000C1 /* FilmColorModelTests.swift */; };
+		B10000010000000000000F1 /* FilmResponseModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000020000000000000F1 /* FilmResponseModelTests.swift */; };
 		DD1D779268ED43B4848974DE /* FilmStageTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 790E2BDA2D0B48F7BC5A6208 /* FilmStageTests.swift */; };
 		D0E709E4FF6BDC2AA1BAF3E2 /* AcceptanceRenderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E14EF0DC57749D32F464E326 /* AcceptanceRenderTests.swift */; };
 		70E5561757EF788DE5C26512 /* FilmExportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9532324EE15FDA5175FDD94C /* FilmExportTests.swift */; };
@@ -67,6 +69,7 @@
 		B10000010000000000000005 /* ReferenceFixtureTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000020000000000000005 /* ReferenceFixtureTests.swift */; };
 		B10000010000000000000006 /* SettingsAndCacheTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000020000000000000006 /* SettingsAndCacheTests.swift */; };
 		B10000010000000000000007 /* day-portrait.png in Resources */ = {isa = PBXBuildFile; fileRef = B10000020000000000000007 /* day-portrait.png */; };
+		B10000010000000000000F2 /* film-response-probes.json in Resources */ = {isa = PBXBuildFile; fileRef = B10000020000000000000F2 /* film-response-probes.json */; };
 		B10000010000000000000008 /* hdr-still-life.png in Resources */ = {isa = PBXBuildFile; fileRef = B10000020000000000000008 /* hdr-still-life.png */; };
 		B10000010000000000000009 /* night-flash.png in Resources */ = {isa = PBXBuildFile; fileRef = B10000020000000000000009 /* night-flash.png */; };
 		B1000001000000000000000A /* VideoProcessorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000002000000000000000B /* VideoProcessorTests.swift */; };
@@ -129,6 +132,7 @@
 		A10000020000000000000031 /* CameraControls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "UI/CameraControls.swift"; sourceTree = "<group>"; };
 		A10000020000000000000032 /* FilmProcessor+Effects.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Processing/FilmProcessor+Effects.swift"; sourceTree = "<group>"; };
 		A10000020000000000000C1 /* FilmColorModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Processing/FilmColorModel.swift; sourceTree = "<group>"; };
+		A10000020000000000000F1 /* FilmResponse.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Processing/FilmResponse.swift; sourceTree = "<group>"; };
 		7F8568F086924B49A873C9CB /* FilmStage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Processing/FilmStage.swift; sourceTree = "<group>"; };
 		A10000020000000000000033 /* FilmProcessor+Rasterization.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Processing/FilmProcessor+Rasterization.swift"; sourceTree = "<group>"; };
 		A10000020000000000000034 /* FilmProcessor+Overlays.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Processing/FilmProcessor+Overlays.swift"; sourceTree = "<group>"; };
@@ -138,6 +142,7 @@
 		B100000200000000000000A1 /* AppModelRecoveryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModelRecoveryTests.swift; sourceTree = "<group>"; };
 		B10000020000000000000002 /* FilmProcessorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FilmProcessorTests.swift; sourceTree = "<group>"; };
 		B10000020000000000000C1 /* FilmColorModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FilmColorModelTests.swift; sourceTree = "<group>"; };
+		B10000020000000000000F1 /* FilmResponseModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FilmResponseModelTests.swift; sourceTree = "<group>"; };
 		790E2BDA2D0B48F7BC5A6208 /* FilmStageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FilmStageTests.swift; sourceTree = "<group>"; };
 		E14EF0DC57749D32F464E326 /* AcceptanceRenderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AcceptanceRenderTests.swift; sourceTree = "<group>"; };
 		9532324EE15FDA5175FDD94C /* FilmExportTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FilmExportTests.swift; sourceTree = "<group>"; };
@@ -147,6 +152,7 @@
 		B10000020000000000000005 /* ReferenceFixtureTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReferenceFixtureTests.swift; sourceTree = "<group>"; };
 		B10000020000000000000006 /* SettingsAndCacheTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsAndCacheTests.swift; sourceTree = "<group>"; };
 		B10000020000000000000007 /* day-portrait.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = day-portrait.png; sourceTree = "<group>"; };
+		B10000020000000000000F2 /* film-response-probes.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = film-response-probes.json; sourceTree = "<group>"; };
 		B10000020000000000000008 /* hdr-still-life.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = hdr-still-life.png; sourceTree = "<group>"; };
 		B10000020000000000000009 /* night-flash.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = night-flash.png; sourceTree = "<group>"; };
 		B10000020000000000000010 /* ApertureTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ApertureTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -230,6 +236,7 @@
 				A1000002000000000000001C /* FilmProcessor.swift */,
 				A10000020000000000000032 /* FilmProcessor+Effects.swift */,
 				A10000020000000000000C1 /* FilmColorModel.swift */,
+				A10000020000000000000F1 /* FilmResponse.swift */,
 				7F8568F086924B49A873C9CB /* FilmStage.swift */,
 				A10000020000000000000033 /* FilmProcessor+Rasterization.swift */,
 				A10000020000000000000034 /* FilmProcessor+Overlays.swift */,
@@ -273,6 +280,7 @@
 				B10000020000000000000001 /* CameraLogicTests.swift */,
 				B10000020000000000000002 /* FilmProcessorTests.swift */,
 				B10000020000000000000C1 /* FilmColorModelTests.swift */,
+				B10000020000000000000F1 /* FilmResponseModelTests.swift */,
 				790E2BDA2D0B48F7BC5A6208 /* FilmStageTests.swift */,
 				E14EF0DC57749D32F464E326 /* AcceptanceRenderTests.swift */,
 				9532324EE15FDA5175FDD94C /* FilmExportTests.swift */,
@@ -292,6 +300,7 @@
 			isa = PBXGroup;
 			children = (
 				B10000020000000000000007 /* day-portrait.png */,
+				B10000020000000000000F2 /* film-response-probes.json */,
 				B10000020000000000000008 /* hdr-still-life.png */,
 				B10000020000000000000009 /* night-flash.png */,
 				B2947AE4AC054E3C8D388312 /* golden-day-portrait-aperture-1998.png */,
@@ -460,6 +469,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				B10000010000000000000007 /* day-portrait.png in Resources */,
+				B10000010000000000000F2 /* film-response-probes.json in Resources */,
 				B10000010000000000000008 /* hdr-still-life.png in Resources */,
 				B10000010000000000000009 /* night-flash.png in Resources */,
 				6047D15119A64069BC519955 /* golden-day-portrait-aperture-1998.png in Resources */,
@@ -528,6 +538,7 @@
 				A10000010000000000000029 /* CameraControls.swift in Sources */,
 				A1000001000000000000002A /* FilmProcessor+Effects.swift in Sources */,
 				A10000010000000000000C1 /* FilmColorModel.swift in Sources */,
+				A10000010000000000000F1 /* FilmResponse.swift in Sources */,
 				ADD7988EA7294DC5AC0DCC36 /* FilmStage.swift in Sources */,
 				A1000001000000000000002B /* FilmProcessor+Rasterization.swift in Sources */,
 				A1000001000000000000002C /* FilmProcessor+Overlays.swift in Sources */,
@@ -545,6 +556,7 @@
 				B10000010000000000000001 /* CameraLogicTests.swift in Sources */,
 				B10000010000000000000002 /* FilmProcessorTests.swift in Sources */,
 				B10000010000000000000C1 /* FilmColorModelTests.swift in Sources */,
+				B10000010000000000000F1 /* FilmResponseModelTests.swift in Sources */,
 				DD1D779268ED43B4848974DE /* FilmStageTests.swift in Sources */,
 				D0E709E4FF6BDC2AA1BAF3E2 /* AcceptanceRenderTests.swift in Sources */,
 				70E5561757EF788DE5C26512 /* FilmExportTests.swift in Sources */,

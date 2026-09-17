@@ -186,7 +186,7 @@ final class VideoProcessor: @unchecked Sendable {
     let renderSize = CGSize(width: abs(transformedSize.width), height: abs(transformedSize.height))
     let noiseBank = Self.makeNoiseBank(seed: recipe.seed, count: 8, size: 384)
     let decision = FilmProcessingDecision.make(for: recipe)
-    let colorCube = FilmColorCube.data(grade: recipe.colorGrade)
+    let colorCube = FilmColorCube.data(for: recipe)
     let videoComposition = AVMutableVideoComposition(asset: asset) { [weak self] request in
       guard let self else {
         request.finish(

@@ -3,7 +3,16 @@ import XCTest
 @testable import Aperture
 
 final class FilmColorModelTests: XCTestCase {
-  private let huji = FilmRecipeCatalog.nineteenNinetyEight.stages.colorGrade ?? .neutral
+  /// The recipe-version-3 1998 colour grade. Version 4 replaced it with a
+  /// fitted `FilmResponseStage`, but persisted v3 renders still re-develop
+  /// through `FilmColorModel`, so its behaviour stays pinned here.
+  static let legacyHujiGrade = FilmColorGrade(
+    exposure: -0.30, contrast: 1.10, saturation: 1.15, warmth: 0.35,
+    highlightRolloff: 0.30, shadowCoolness: 0.30, channelSplit: 0.04, blackCrush: 0.18,
+    shadowTint: FilmColorTint(red: -0.010, green: 0, blue: 0.035),
+    highlightTint: FilmColorTint(red: 0.045, green: 0.020, blue: -0.040),
+    blueGreenSuppression: 0.8, blueDarken: 0.7, redHueShift: 0.6)
+  private let huji = FilmColorModelTests.legacyHujiGrade
 
   func testHujiGradePreservesSceneHuesWhileSeparatingWarmAndCoolColors() {
     let wall = FilmColorModel.map(rgb(171, 173, 163), grade: huji)
