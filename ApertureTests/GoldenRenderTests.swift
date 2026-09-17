@@ -55,7 +55,7 @@ final class GoldenRenderTests: XCTestCase {
     // Every stage runs on this pipeline (colour grade, halation/bloom,
     // softness, chromatic aberration, grain, vignette, date stamp); the
     // catalog films above additionally cover the light-leak stage. Original
-    // Capture covers the all-zero, dateless baseline on top of that.
+    // Capture covers the all-zero grade (stamp still on) on top of that.
     cases.append(
       GoldenCase(fixtureName: "day-portrait", recipe: FilmRecipeCatalog.legacyOriginal, seed: 42))
 

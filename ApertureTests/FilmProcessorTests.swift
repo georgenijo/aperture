@@ -29,14 +29,14 @@ final class FilmProcessorTests: XCTestCase {
       dateStamp: DateStampConfiguration(mode: .off)
     )
     for catalogRecipe in FilmRecipeCatalog.all {
-      XCTAssertTrue(catalogRecipe.baseParameters.isWithinSupportedBounds)
+      XCTAssertTrue(catalogRecipe.stages.isWithinSupportedBounds)
       let applied = catalogRecipe.resolve(
         seed: 99,
         capturedAt: date,
         options: options,
         timeZone: TimeZone(secondsFromGMT: 0)!
       )
-      XCTAssertTrue(applied.parameters.isWithinSupportedBounds)
+      XCTAssertTrue(applied.stages.isWithinSupportedBounds)
       XCTAssertEqual(applied.version, catalogRecipe.version)
       XCTAssertEqual(applied.seed, 99)
     }
@@ -181,11 +181,12 @@ final class FilmProcessorTests: XCTestCase {
     let source = try XCTUnwrap(makeSolidImage(wall, width: 64, height: 48))
     XCTAssertEqual(try centrePixel(source).blue, wall.blue, accuracy: 1 / 255, "source")
     let processor = FilmProcessor(context: CIContext(options: [.useSoftwareRenderer: true]))
-    let recipe = makeGradeOnlyRecipe(FilmRecipeCatalog.nineteenNinetyEight.baseParameters)
+    let recipe = makeGradeOnlyRecipe(
+      FilmRecipeCatalog.nineteenNinetyEight.stages.colorGrade ?? .neutral)
     let output = try await processor.renderedCGImage(
       CIImage(cgImage: source), recipe: recipe, renderSize: .preview(maxPixelDimension: 64))
 
-    let expected = FilmColorModel.map(wall, grade: recipe.parameters.colorGrade)
+    let expected = FilmColorModel.map(wall, grade: recipe.colorGrade)
     let centre = try centrePixel(output)
     XCTAssertEqual(centre.red, expected.red, accuracy: 3 / 255, "red")
     XCTAssertEqual(centre.green, expected.green, accuracy: 3 / 255, "green")
@@ -254,22 +255,23 @@ final class FilmProcessorTests: XCTestCase {
     }
 
     let valid = makeRecipe(seed: 1)
+    let unsupportedVersion = FilmRecipeVersion.current + 1
     let unsupported = AppliedFilmRecipe(
       identifier: valid.identifier,
-      version: 2,
+      version: unsupportedVersion,
       seed: valid.seed,
-      parameters: valid.parameters,
+      stages: valid.stages,
       resolvedSettings: valid.resolvedSettings
     )
     XCTAssertThrowsError(try FilmProcessor.shared.process(source, recipe: unsupported)) { error in
-      XCTAssertEqual(error as? FilmProcessorError, .unsupportedRecipeVersion(2))
+      XCTAssertEqual(error as? FilmProcessorError, .unsupportedRecipeVersion(unsupportedVersion))
     }
 
     let missingStamp = AppliedFilmRecipe(
       identifier: valid.identifier,
       version: valid.version,
       seed: valid.seed,
-      parameters: valid.parameters,
+      stages: valid.stages,
       resolvedSettings: FilmResolvedSettings(
         lightLeakApplied: false,
         dateStampConfiguration: DateStampConfiguration(
@@ -334,17 +336,20 @@ final class FilmProcessorTests: XCTestCase {
 
   /// The catalog grade with grain, halation, softness, aberration, vignette
   /// and leaks removed, so only the colour stage touches the pixels.
-  private func makeGradeOnlyRecipe(_ base: FilmParameters) -> AppliedFilmRecipe {
-    let parameters = FilmParameters(
-      exposure: base.exposure, contrast: base.contrast, saturation: base.saturation,
-      warmth: base.warmth, highlightRolloff: base.highlightRolloff,
-      shadowCoolness: base.shadowCoolness,
-      grainAmount: 0, grainSize: 1, halation: 0, vignette: 0, softness: 0,
-      chromaticAberration: 0, lightLeakProbability: 0, lightLeakStrength: 0,
-      channelSplit: base.channelSplit, blackCrush: base.blackCrush,
-      shadowTint: base.shadowTint, highlightTint: base.highlightTint)
+  private func makeGradeOnlyRecipe(_ grade: FilmColorGrade) -> AppliedFilmRecipe {
+    let stages: [FilmStage] = [
+      .colorGrade(grade),
+      .halation(HalationStage(amount: 0)),
+      .softness(SoftnessStage(amount: 0)),
+      .chromaticAberration(ChromaticAberrationStage(amount: 0)),
+      .grain(GrainStage(amount: 0, size: 1)),
+      .lightLeak(LightLeakStage(probability: 0, strength: 0, minWidth: 0.16, maxWidth: 0.42)),
+      .vignette(VignetteStage(amount: 0)),
+      .dateStamp(DateStampStage()),
+    ]
     return AppliedFilmRecipe(
-      identifier: .nineteenNinetyEight, version: 1, seed: 1, parameters: parameters,
+      identifier: .nineteenNinetyEight, version: FilmRecipeVersion.current, seed: 1,
+      stages: stages,
       resolvedSettings: FilmResolvedSettings(
         lightLeakApplied: false, dateStampConfiguration: .off, dateStampText: nil,
         timeZoneIdentifier: "GMT"))

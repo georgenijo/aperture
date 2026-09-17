@@ -11,7 +11,9 @@ enum FilmOverlayFactory {
     FilmDateStampLayout.make(text: text, canvasSize: canvasSize)
   }
 
-  static func dateStampImage(text: String, extent: CGRect) -> CIImage? {
+  static func dateStampImage(
+    text: String, extent: CGRect, style: DateStampStage.Style = .monospaced
+  ) -> CIImage? {
     guard let layout = dateStampLayout(text: text, canvasSize: extent.size),
       extent.width.isFinite,
       extent.height.isFinite,
@@ -47,7 +49,11 @@ enum FilmOverlayFactory {
     context.setAllowsAntialiasing(true)
     context.setShouldAntialias(true)
     let fontSize = layout.fontPointSize * scale
-    let font = CTFontCreateWithName("SFMono-Semibold" as CFString, fontSize, nil)
+    let fontName: CFString
+    switch style {
+    case .monospaced: fontName = "SFMono-Semibold" as CFString
+    }
+    let font = CTFontCreateWithName(fontName, fontSize, nil)
     let attributes: [NSAttributedString.Key: Any] = [
       NSAttributedString.Key(kCTFontAttributeName as String): font,
       NSAttributedString.Key(kCTForegroundColorAttributeName as String): CGColor(

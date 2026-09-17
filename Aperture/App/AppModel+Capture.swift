@@ -250,7 +250,7 @@ extension AppModel {
           identifier: previousRecipe.identifier,
           version: previousRecipe.version,
           seed: previousRecipe.seed,
-          parameters: previousRecipe.parameters,
+          stages: previousRecipe.stages,
           resolvedSettings: FilmResolvedSettings(
             lightLeakApplied: previousRecipe.resolvedSettings.lightLeakApplied,
             dateStampConfiguration: digitalConfiguration,

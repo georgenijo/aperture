@@ -49,6 +49,7 @@
 		A10000010000000000000029 /* CameraControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000020000000000000031 /* CameraControls.swift */; };
 		A1000001000000000000002A /* FilmProcessor+Effects.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000020000000000000032 /* FilmProcessor+Effects.swift */; };
 		A10000010000000000000C1 /* FilmColorModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000020000000000000C1 /* FilmColorModel.swift */; };
+		ADD7988EA7294DC5AC0DCC36 /* FilmStage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F8568F086924B49A873C9CB /* FilmStage.swift */; };
 		A1000001000000000000002B /* FilmProcessor+Rasterization.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000020000000000000033 /* FilmProcessor+Rasterization.swift */; };
 		A1000001000000000000002C /* FilmProcessor+Overlays.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000020000000000000034 /* FilmProcessor+Overlays.swift */; };
 		A1000001000000000000002D /* MediaLibrary+Types.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000020000000000000035 /* MediaLibrary+Types.swift */; };
@@ -57,6 +58,7 @@
 		B100000100000000000000A1 /* AppModelRecoveryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B100000200000000000000A1 /* AppModelRecoveryTests.swift */; };
 		B10000010000000000000002 /* FilmProcessorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000020000000000000002 /* FilmProcessorTests.swift */; };
 		B10000010000000000000C1 /* FilmColorModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000020000000000000C1 /* FilmColorModelTests.swift */; };
+		DD1D779268ED43B4848974DE /* FilmStageTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 790E2BDA2D0B48F7BC5A6208 /* FilmStageTests.swift */; };
 		B10000010000000000000003 /* MediaLibraryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000020000000000000003 /* MediaLibraryTests.swift */; };
 		B10000010000000000000004 /* MediaModelsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000020000000000000004 /* MediaModelsTests.swift */; };
 		B10000010000000000000005 /* ReferenceFixtureTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000020000000000000005 /* ReferenceFixtureTests.swift */; };
@@ -124,6 +126,7 @@
 		A10000020000000000000031 /* CameraControls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "UI/CameraControls.swift"; sourceTree = "<group>"; };
 		A10000020000000000000032 /* FilmProcessor+Effects.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Processing/FilmProcessor+Effects.swift"; sourceTree = "<group>"; };
 		A10000020000000000000C1 /* FilmColorModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Processing/FilmColorModel.swift; sourceTree = "<group>"; };
+		7F8568F086924B49A873C9CB /* FilmStage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Processing/FilmStage.swift; sourceTree = "<group>"; };
 		A10000020000000000000033 /* FilmProcessor+Rasterization.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Processing/FilmProcessor+Rasterization.swift"; sourceTree = "<group>"; };
 		A10000020000000000000034 /* FilmProcessor+Overlays.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Processing/FilmProcessor+Overlays.swift"; sourceTree = "<group>"; };
 		A10000020000000000000035 /* MediaLibrary+Types.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Storage/MediaLibrary+Types.swift"; sourceTree = "<group>"; };
@@ -132,6 +135,7 @@
 		B100000200000000000000A1 /* AppModelRecoveryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModelRecoveryTests.swift; sourceTree = "<group>"; };
 		B10000020000000000000002 /* FilmProcessorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FilmProcessorTests.swift; sourceTree = "<group>"; };
 		B10000020000000000000C1 /* FilmColorModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FilmColorModelTests.swift; sourceTree = "<group>"; };
+		790E2BDA2D0B48F7BC5A6208 /* FilmStageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FilmStageTests.swift; sourceTree = "<group>"; };
 		B10000020000000000000003 /* MediaLibraryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaLibraryTests.swift; sourceTree = "<group>"; };
 		B10000020000000000000004 /* MediaModelsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaModelsTests.swift; sourceTree = "<group>"; };
 		B10000020000000000000005 /* ReferenceFixtureTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReferenceFixtureTests.swift; sourceTree = "<group>"; };
@@ -220,6 +224,7 @@
 				A1000002000000000000001C /* FilmProcessor.swift */,
 				A10000020000000000000032 /* FilmProcessor+Effects.swift */,
 				A10000020000000000000C1 /* FilmColorModel.swift */,
+				7F8568F086924B49A873C9CB /* FilmStage.swift */,
 				A10000020000000000000033 /* FilmProcessor+Rasterization.swift */,
 				A10000020000000000000034 /* FilmProcessor+Overlays.swift */,
 				A1000002000000000000002A /* VideoProcessor.swift */,
@@ -262,6 +267,7 @@
 				B10000020000000000000001 /* CameraLogicTests.swift */,
 				B10000020000000000000002 /* FilmProcessorTests.swift */,
 				B10000020000000000000C1 /* FilmColorModelTests.swift */,
+				790E2BDA2D0B48F7BC5A6208 /* FilmStageTests.swift */,
 				B10000020000000000000003 /* MediaLibraryTests.swift */,
 				B10000020000000000000004 /* MediaModelsTests.swift */,
 				B10000020000000000000005 /* ReferenceFixtureTests.swift */,
@@ -513,6 +519,7 @@
 				A10000010000000000000029 /* CameraControls.swift in Sources */,
 				A1000001000000000000002A /* FilmProcessor+Effects.swift in Sources */,
 				A10000010000000000000C1 /* FilmColorModel.swift in Sources */,
+				ADD7988EA7294DC5AC0DCC36 /* FilmStage.swift in Sources */,
 				A1000001000000000000002B /* FilmProcessor+Rasterization.swift in Sources */,
 				A1000001000000000000002C /* FilmProcessor+Overlays.swift in Sources */,
 				A1000001000000000000002D /* MediaLibrary+Types.swift in Sources */,
@@ -529,6 +536,7 @@
 				B10000010000000000000001 /* CameraLogicTests.swift in Sources */,
 				B10000010000000000000002 /* FilmProcessorTests.swift in Sources */,
 				B10000010000000000000C1 /* FilmColorModelTests.swift in Sources */,
+				DD1D779268ED43B4848974DE /* FilmStageTests.swift in Sources */,
 				B10000010000000000000003 /* MediaLibraryTests.swift in Sources */,
 				B10000010000000000000004 /* MediaModelsTests.swift in Sources */,
 				B10000010000000000000005 /* ReferenceFixtureTests.swift in Sources */,

@@ -124,7 +124,7 @@ final class SettingsAndCacheTests: XCTestCase {
     let rerendered = ThumbnailCacheKey(
       item: item,
       maximumPixelDimension: 300,
-      version: ThumbnailCacheVersion(namespace: "aperture.thumbnail", schema: 1, renderer: 3)
+      version: ThumbnailCacheVersion(namespace: "aperture.thumbnail", schema: 1, renderer: 4)
     )
 
     XCTAssertEqual(first, second)

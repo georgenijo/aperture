@@ -140,7 +140,8 @@ final class VideoProcessorTests: XCTestCase {
       try? FileManager.default.removeItem(at: sourceURL)
       try? FileManager.default.removeItem(at: destinationURL)
     }
-    let recipe = makeGradeOnlyRecipe(FilmRecipeCatalog.nineteenNinetyEight.baseParameters)
+    let recipe = makeGradeOnlyRecipe(
+      FilmRecipeCatalog.nineteenNinetyEight.stages.colorGrade ?? .neutral)
     let outputURL = try await VideoProcessor().process(
       sourceURL: sourceURL, recipe: recipe, destinationURL: destinationURL)
 
@@ -150,7 +151,7 @@ final class VideoProcessorTests: XCTestCase {
     let sourceCentre = try await centrePixel(ofVideoAt: sourceURL)
 
     let centre = try await centrePixel(ofVideoAt: outputURL)
-    let expected = FilmColorModel.map(sourceCentre, grade: recipe.parameters.colorGrade)
+    let expected = FilmColorModel.map(sourceCentre, grade: recipe.colorGrade)
     XCTAssertEqual(centre.red, expected.red, accuracy: 8 / 255, "red")
     XCTAssertEqual(centre.green, expected.green, accuracy: 8 / 255, "green")
     XCTAssertEqual(centre.blue, expected.blue, accuracy: 8 / 255, "blue")
@@ -176,18 +177,19 @@ final class VideoProcessorTests: XCTestCase {
       XCTAssertEqual(error, .sourceMissing)
     }
 
+    let unsupportedVersion = FilmRecipeVersion.current + 1
     let unsupported = AppliedFilmRecipe(
       identifier: valid.identifier,
-      version: 2,
+      version: unsupportedVersion,
       seed: valid.seed,
-      parameters: valid.parameters,
+      stages: valid.stages,
       resolvedSettings: valid.resolvedSettings
     )
     do {
       _ = try await VideoProcessor.shared.process(sourceURL: missingURL, recipe: unsupported)
       XCTFail("An unsupported recipe should fail before opening the source")
     } catch let error as VideoProcessorError {
-      XCTAssertEqual(error, .unsupportedRecipeVersion(2))
+      XCTAssertEqual(error, .unsupportedRecipeVersion(unsupportedVersion))
     }
   }
 
@@ -227,7 +229,7 @@ final class VideoProcessorTests: XCTestCase {
         identifier: valid.identifier,
         version: valid.version,
         seed: valid.seed,
-        parameters: valid.parameters,
+        stages: valid.stages,
         resolvedSettings: FilmResolvedSettings(
           lightLeakApplied: valid.resolvedSettings.lightLeakApplied,
           dateStampConfiguration: valid.resolvedSettings.dateStampConfiguration,
@@ -240,17 +242,20 @@ final class VideoProcessorTests: XCTestCase {
     return valid
   }
 
-  private func makeGradeOnlyRecipe(_ base: FilmParameters) -> AppliedFilmRecipe {
-    let parameters = FilmParameters(
-      exposure: base.exposure, contrast: base.contrast, saturation: base.saturation,
-      warmth: base.warmth, highlightRolloff: base.highlightRolloff,
-      shadowCoolness: base.shadowCoolness,
-      grainAmount: 0, grainSize: 1, halation: 0, vignette: 0, softness: 0,
-      chromaticAberration: 0, lightLeakProbability: 0, lightLeakStrength: 0,
-      channelSplit: base.channelSplit, blackCrush: base.blackCrush,
-      shadowTint: base.shadowTint, highlightTint: base.highlightTint)
+  private func makeGradeOnlyRecipe(_ grade: FilmColorGrade) -> AppliedFilmRecipe {
+    let stages: [FilmStage] = [
+      .colorGrade(grade),
+      .halation(HalationStage(amount: 0)),
+      .softness(SoftnessStage(amount: 0)),
+      .chromaticAberration(ChromaticAberrationStage(amount: 0)),
+      .grain(GrainStage(amount: 0, size: 1)),
+      .lightLeak(LightLeakStage(probability: 0, strength: 0, minWidth: 0.16, maxWidth: 0.42)),
+      .vignette(VignetteStage(amount: 0)),
+      .dateStamp(DateStampStage()),
+    ]
     return AppliedFilmRecipe(
-      identifier: .nineteenNinetyEight, version: 1, seed: 1, parameters: parameters,
+      identifier: .nineteenNinetyEight, version: FilmRecipeVersion.current, seed: 1,
+      stages: stages,
       resolvedSettings: FilmResolvedSettings(
         lightLeakApplied: false, dateStampConfiguration: .off, dateStampText: nil,
         timeZoneIdentifier: "GMT"))
