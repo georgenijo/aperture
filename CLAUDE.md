@@ -16,7 +16,7 @@ The last command is an unsigned compile check; running the camera requires a sig
 
 - `Aperture/CameraManager.swift` and `Aperture/Camera/`: serialized AVFoundation session/configuration, photo/movie delegates, microphone input, capabilities, zoom/lens mapping, focus/exposure, interruptions, and pressure handling.
 - `Aperture/App/`: `AppModel`, the main actor boundary between camera, storage, processing, settings, thumbnails, and export.
-- `Aperture/Processing/`: versioned `FilmRecipe` values and deterministic Core Image rendering.
+- `Aperture/Processing/`: versioned `FilmRecipe` values and deterministic Core Image rendering. `FilmResponse.swift` is the fitted colour stage the 1998 recipe uses; its numbers come from `tools/film-response-fit/` (Python, offline) and must stay in sync with `ApertureTests/Fixtures/film-response-probes.json`.
 - `Aperture/Storage/`: actor-isolated media library, atomic staging/commit/replacement/deletion, recovery, legacy migration and its durable deletion ledger, settings, and cache keys.
 - `Aperture/UI/`, root SwiftUI views, and `CameraPreview.swift`: camera, Lab, detail, settings, and styling.
 - `ApertureTests/` and `ApertureUITests/`: unit/integration and permission-denied/empty-library UI coverage.

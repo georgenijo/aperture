@@ -14,6 +14,24 @@ enum FilmColorCube {
     FilmColorModel.cubeData(dimension: dimension, grade: grade)
   }
 
+  static func data(response: FilmResponseStage) -> Data {
+    FilmResponseModel.cubeData(dimension: dimension, response: response)
+  }
+
+  /// One cube per colour stage, in the recipe's array order, so a manifest
+  /// carrying both a `colorGrade` and a `filmResponse` composes them the
+  /// same way in video as `FilmProcessor` does for stills. A recipe with no
+  /// colour stage gets no cube at all (identity).
+  static func data(for recipe: AppliedFilmRecipe) -> [Data] {
+    recipe.stages.compactMap { stage in
+      switch stage {
+      case .colorGrade(let grade): return data(grade: grade)
+      case .filmResponse(let response): return data(response: response)
+      default: return nil
+      }
+    }
+  }
+
   private static let sRGB = CGColorSpace(name: CGColorSpace.sRGB)
 
   static func apply(_ image: CIImage, cubeData: Data, extent: CGRect) -> CIImage {
@@ -31,6 +49,12 @@ enum FilmColorCube {
 extension FilmProcessor {
   func applyColorGrade(_ image: CIImage, grade: FilmColorGrade, extent: CGRect) -> CIImage {
     FilmColorCube.apply(image, cubeData: FilmColorCube.data(grade: grade), extent: extent)
+  }
+
+  func applyFilmResponse(_ image: CIImage, response: FilmResponseStage, extent: CGRect)
+    -> CIImage
+  {
+    FilmColorCube.apply(image, cubeData: FilmColorCube.data(response: response), extent: extent)
   }
 
   func applyHalation(_ image: CIImage, stage: HalationStage, extent: CGRect) -> CIImage {

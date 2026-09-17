@@ -8,6 +8,9 @@ import Foundation
 /// `FilmStage.legacyPipeline` reproduces the exact v1 order and arithmetic.
 enum FilmStage: Hashable, Sendable {
   case colorGrade(FilmColorGrade)
+  /// A fitted film response (matrix, per-channel curves, OKLab hue bands);
+  /// the colour stage for recipes that need real tonal shape.
+  case filmResponse(FilmResponseStage)
   case halation(HalationStage)
   case softness(SoftnessStage)
   case chromaticAberration(ChromaticAberrationStage)
@@ -19,8 +22,8 @@ enum FilmStage: Hashable, Sendable {
 
 extension FilmStage: Codable {
   private enum Kind: String, Codable {
-    case colorGrade, halation, softness, chromaticAberration, grain, lightLeak, vignette
-    case dateStamp
+    case colorGrade, filmResponse, halation, softness, chromaticAberration, grain, lightLeak
+    case vignette, dateStamp
   }
 
   private enum CodingKeys: String, CodingKey {
@@ -32,6 +35,8 @@ extension FilmStage: Codable {
     switch try container.decode(Kind.self, forKey: .kind) {
     case .colorGrade:
       self = .colorGrade(try container.decode(FilmColorGrade.self, forKey: .configuration))
+    case .filmResponse:
+      self = .filmResponse(try container.decode(FilmResponseStage.self, forKey: .configuration))
     case .halation:
       self = .halation(try container.decode(HalationStage.self, forKey: .configuration))
     case .softness:
@@ -55,6 +60,9 @@ extension FilmStage: Codable {
     switch self {
     case .colorGrade(let configuration):
       try container.encode(Kind.colorGrade, forKey: .kind)
+      try container.encode(configuration, forKey: .configuration)
+    case .filmResponse(let configuration):
+      try container.encode(Kind.filmResponse, forKey: .kind)
       try container.encode(configuration, forKey: .configuration)
     case .halation(let configuration):
       try container.encode(Kind.halation, forKey: .kind)
@@ -607,6 +615,11 @@ extension FilmStage {
 extension Array where Element == FilmStage {
   var colorGrade: FilmColorGrade? {
     for case .colorGrade(let value) in self { return value }
+    return nil
+  }
+
+  var filmResponse: FilmResponseStage? {
+    for case .filmResponse(let value) in self { return value }
     return nil
   }
 

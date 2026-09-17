@@ -31,7 +31,6 @@ final class AcceptanceRenderTests: XCTestCase {
     let recipe = try catalogRecipe(for: environment["APERTURE_RENDER_RECIPE"])
     let seed = environment["APERTURE_RENDER_SEED"].flatMap { UInt64($0) } ?? 20_260_915
 
-    let sourceData = try Data(contentsOf: URL(fileURLWithPath: sourcePath))
     let capturedAt = Date(timeIntervalSince1970: 1_789_500_000)
     let timeZone = try XCTUnwrap(TimeZone(identifier: "America/New_York"))
     let options = FilmProcessingOptions(
@@ -44,17 +43,36 @@ final class AcceptanceRenderTests: XCTestCase {
     let applied = recipe.resolve(
       seed: seed, capturedAt: capturedAt, options: options, timeZone: timeZone)
 
-    let rendered = try FilmProcessor.shared.process(sourceData, recipe: applied, renderSize: .full)
-    let outputURL = URL(fileURLWithPath: outputPath)
-    try FilmProcessor.shared.encode(rendered, to: outputURL, format: .jpeg, quality: 0.92)
+    // `APERTURE_RENDER_SOURCE` may be a single image or a directory of them;
+    // a directory renders every image into `APERTURE_RENDER_OUTPUT` (also a
+    // directory) under the source file name with a `.jpg` extension.
+    var isDirectory: ObjCBool = false
+    FileManager.default.fileExists(atPath: sourcePath, isDirectory: &isDirectory)
+    let jobs: [(source: URL, output: URL)]
+    if isDirectory.boolValue {
+      let sources = try FileManager.default.contentsOfDirectory(
+        at: URL(fileURLWithPath: sourcePath), includingPropertiesForKeys: nil
+      ).filter { ["heic", "jpg", "jpeg", "png"].contains($0.pathExtension.lowercased()) }
+      let outputDirectory = URL(fileURLWithPath: outputPath, isDirectory: true)
+      try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
+      jobs = sources.sorted { $0.lastPathComponent < $1.lastPathComponent }.map {
+        ($0, outputDirectory.appendingPathComponent($0.deletingPathExtension().lastPathComponent + ".jpg"))
+      }
+    } else {
+      jobs = [(URL(fileURLWithPath: sourcePath), URL(fileURLWithPath: outputPath))]
+    }
 
-    print(
-      "[AcceptanceRenderTests] recipe=\(recipe.displayName) seed=\(seed) "
-        + "lightLeakApplied=\(applied.resolvedSettings.lightLeakApplied) "
-        + "dateStampText=\(applied.resolvedSettings.dateStampText ?? "<none>") "
-        + "output=\(outputPath)")
-
-    XCTAssertTrue(FileManager.default.fileExists(atPath: outputPath))
+    for job in jobs {
+      let sourceData = try Data(contentsOf: job.source)
+      let rendered = try FilmProcessor.shared.process(sourceData, recipe: applied, renderSize: .full)
+      try FilmProcessor.shared.encode(rendered, to: job.output, format: .jpeg, quality: 0.92)
+      print(
+        "[AcceptanceRenderTests] recipe=\(recipe.displayName) seed=\(seed) "
+          + "lightLeakApplied=\(applied.resolvedSettings.lightLeakApplied) "
+          + "dateStampText=\(applied.resolvedSettings.dateStampText ?? "<none>") "
+          + "source=\(job.source.lastPathComponent) output=\(job.output.path)")
+      XCTAssertTrue(FileManager.default.fileExists(atPath: job.output.path))
+    }
   }
 
   private func catalogRecipe(for token: String?) throws -> FilmRecipe {

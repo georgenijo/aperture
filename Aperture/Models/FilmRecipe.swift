@@ -147,8 +147,8 @@ struct FilmParameters: Codable, Hashable, Sendable {
 /// knob set applied in a hard-coded order; v2 recipes carry that same order
 /// (and, for future recipes, other orders) explicitly as `stages`.
 enum FilmRecipeVersion {
-  static let current = 3
-  static let supported = 1...3
+  static let current = 4
+  static let supported = 1...4
   /// The first version whose manifests persist `stages` instead of the flat
   /// v1 `parameters`.
   static let stageSchema = 2
@@ -223,6 +223,11 @@ struct FilmRecipe: Codable, Hashable, Identifiable, Sendable {
         leakStage.strength =
           leakEnabled ? Self.clampUnit(leakStage.strength * (leakStrengthScale ?? 1)) : 0
         return .lightLeak(leakStage)
+      // `.filmResponse` is deliberately left untouched: the fitted response
+      // is the measured look, so 1998 no longer gets the per-shot
+      // exposure/warmth jitter the parametric grade had. Grain and leak
+      // variation still come from the seed. The jitter draws above are kept
+      // so the RNG sequence, and therefore grain/leak decisions, is unchanged.
       default:
         return stage
       }
@@ -343,6 +348,7 @@ struct AppliedFilmRecipe: Hashable, Sendable {
   /// Convenience access to the persisted still-encoding quality.
   var compressionQuality: Double { resolvedSettings.compressionQuality }
   var colorGrade: FilmColorGrade { stages.colorGrade ?? .neutral }
+  var filmResponse: FilmResponseStage? { stages.filmResponse }
   var halation: HalationStage? { stages.halation }
   var softness: SoftnessStage? { stages.softness }
   var chromaticAberration: ChromaticAberrationStage? { stages.chromaticAberration }
@@ -396,33 +402,41 @@ extension AppliedFilmRecipe: Codable {
 enum FilmRecipeCatalog {
   static let all: [FilmRecipe] = [nineteenNinetyEight, night, cinema]
 
-  // Huji's signature is a dense disposable-camera curve with vivid source
-  // colours, cool/cyan-leaning shade pulled down toward neutral, warm
-  // skin/wood pushed toward orange, and imperfect plastic-lens optics: a
-  // pink-tinted halation, an isotropic soft-focus blur, a deliberately
-  // deterministic (unseeded) chromatic-aberration fringe the date stamp sits
-  // on top of, and a narrow, top/right-only, capped-alpha light leak. This
-  // is authored as an explicit stage list (not the flat v1 `parameters:`
-  // knobs) because the look now depends on stage-specific fields -- tint,
-  // radius behaviour, softness kind, seeding, edges, alpha cap -- that the
-  // v1 `FilmParameters` shape has no room for.
+  // The 1998 look is a fitted film response rather than hand-tuned knobs:
+  // `tools/film-response-fit/` aligns iPhone originals to Huji-shot
+  // references of the same scenes and regresses a crosstalk matrix,
+  // per-channel tone curves, tone-dependent chroma, and per-hue-band
+  // corrections against them (recipe version 4, issue #18 follow-up). The
+  // shape that came out is a real S-curve: a crushed warm toe, midtones held,
+  // highlights allowed to reach white, blues pulled down toward navy, and
+  // warm hues lifted and saturated. The optics stages below are then set
+  // visibly rather than homeopathically: a wide pink halation, the isotropic
+  // soft-focus blur, a deterministic chromatic-aberration fringe the
+  // seven-segment stamp sits on top of, film grain, a narrow top/right-only
+  // capped-alpha light leak, and a soft vignette.
   static let nineteenNinetyEight = FilmRecipe(
     id: .nineteenNinetyEight,
     version: FilmRecipeVersion.current,
     displayName: "1998",
     stages: [
-      .colorGrade(
-        FilmColorGrade(
-          exposure: -0.30, contrast: 1.10, saturation: 1.15, warmth: 0.35,
-          highlightRolloff: 0.30, shadowCoolness: 0.30, channelSplit: 0.04, blackCrush: 0.18,
-          shadowTint: FilmColorTint(red: -0.010, green: 0, blue: 0.035),
-          highlightTint: FilmColorTint(red: 0.045, green: 0.020, blue: -0.040),
-          blueGreenSuppression: 0.8, blueDarken: 0.7, redHueShift: 0.6
-        )),
+      .filmResponse(
+        FilmResponseStage(
+          matrix: [0.998348, -0.008885, -0.148114,
+            0.151087, 0.997864, -0.128046,
+            -0.044489, -0.039532, 0.999481],
+          curves: [
+            [0.000000, 0.090402, 0.152593, 0.319448, 0.439925, 0.613285, 0.779785, 0.917039, 0.994538],
+            [0.000000, 0.070095, 0.141415, 0.319199, 0.439739, 0.613283, 0.778255, 0.910293, 0.981941],
+            [0.000000, 0.047451, 0.130237, 0.318950, 0.439552, 0.613282, 0.775150, 0.903420, 0.968171],
+          ],
+          saturation: [0.758925, 1.199240, 0.579074],
+          hueChroma: [-0.008910, 0.246697, -0.133371, -0.010636, -0.002446, -0.004587, -0.164736, -0.002792],
+          hueRotate: [-0.003869, -0.122947, -0.142692, -0.002308, 0.002107, 0.150000, -0.001415, -0.110779],
+          hueLight: [-0.038137, 0.247080, -0.088487, -0.014831, -0.006916, -0.055911, -0.009129, -0.214261])),
       .halation(
         HalationStage(
-          amount: 0.16, radiusScale: 0.005,
-          tint: .fixed(red: 1.0, green: 0.78, blue: 0.92), radiusScalesWithAmount: false)),
+          amount: 0.30, radiusScale: 0.02,
+          tint: .fixed(red: 1.0, green: 0.80, blue: 0.90), radiusScalesWithAmount: false)),
       .softness(SoftnessStage(amount: 0.72, kind: .gaussian)),
       // Runs before chromatic aberration deliberately, so the stamp picks up
       // the colour fringe like a real print would.
@@ -431,7 +445,7 @@ enum FilmRecipeCatalog {
       .chromaticAberration(
         ChromaticAberrationStage(
           amount: 0.78, redGain: -0.0022, blueGain: 0.0032, lateralShiftScale: 0, seeded: false)),
-      .grain(GrainStage(amount: 0.12, size: 0.9)),
+      .grain(GrainStage(amount: 0.22, size: 1.0)),
       .lightLeak(
         LightLeakStage(
           probability: 0.46, strength: 0.30, minWidth: 0.10, maxWidth: 0.27,
@@ -443,7 +457,7 @@ enum FilmRecipeCatalog {
           edges: [.top, .right],
           alphaCap: 0.16
         )),
-      .vignette(VignetteStage(amount: 0.20)),
+      .vignette(VignetteStage(amount: 0.32)),
     ]
   )
 

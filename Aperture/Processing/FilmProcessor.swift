@@ -319,6 +319,8 @@ final class FilmProcessor: @unchecked Sendable {
       switch stage {
       case .colorGrade(let grade):
         image = applyColorGrade(image, grade: grade, extent: bounds)
+      case .filmResponse(let response):
+        image = applyFilmResponse(image, response: response, extent: bounds)
       case .halation(let halationStage):
         image = applyHalation(image, stage: halationStage, extent: bounds)
       case .softness(let softnessStage):
