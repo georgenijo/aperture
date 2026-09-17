@@ -53,13 +53,15 @@ struct FilmResponseStage: Codable, Hashable, Sendable {
     // Fallbacks read the plain constants, never `identity`, so building
     // `identity` itself cannot recurse into its own one-time initialiser.
     self.matrix = Self.normalised(matrix, count: 9, fallback: Self.identityMatrix)
-    var normalisedCurves = [[Double]]()
-    for channel in 0..<3 {
-      let curve = channel < curves.count ? curves[channel] : Self.identityCurve
-      normalisedCurves.append(
-        Self.normalised(curve, count: Self.knotCount, fallback: Self.identityCurve))
+    // The curves block must be exactly three channels; any other shape falls
+    // back wholesale so a one-row manifest cannot black out a single channel.
+    if curves.count == 3 {
+      self.curves = curves.map {
+        Self.normalised($0, count: Self.knotCount, fallback: Self.identityCurve)
+      }
+    } else {
+      self.curves = Array(repeating: Self.identityCurve, count: 3)
     }
-    self.curves = normalisedCurves
     self.saturation = Self.normalised(saturation, count: 3, fallback: Self.unitSaturation)
     self.hueChroma = Self.normalised(hueChroma, count: Self.bandCount, fallback: Self.zeroBands)
     self.hueRotate = Self.normalised(hueRotate, count: Self.bandCount, fallback: Self.zeroBands)
@@ -96,6 +98,65 @@ enum FilmResponseModel {
   /// Maps one sRGB-encoded colour through the response. Mirrors
   /// `tools/film-response-fit/model.py::apply` exactly.
   static func map(_ input: FilmRGB, response: FilmResponseStage) -> FilmRGB {
+    map(input, response: response, curves: response.curves.map(PreparedCurve.init))
+  }
+
+  /// A tone curve with its monotone knot values and PCHIP tangents computed
+  /// once, so a 32³ cube bake does not redo that work per sample.
+  struct PreparedCurve {
+    let values: [Double]
+    let tangents: [Double]
+    let spacing: Double
+
+    init(_ knots: [Double]) {
+      let n = max(knots.count, 2)
+      var y = [Double](repeating: 0, count: n)
+      var running = -Double.infinity
+      for i in 0..<n {
+        let knot = i < knots.count ? knots[i] : Double(i) / Double(n - 1)
+        running = max(running, min(max(knot, 0), 1))
+        y[i] = running
+      }
+      let h = 1 / Double(n - 1)
+      var delta = [Double](repeating: 0, count: n - 1)
+      for i in 0..<(n - 1) { delta[i] = (y[i + 1] - y[i]) / h }
+      var m = [Double](repeating: 0, count: n)
+      m[0] = delta[0]
+      m[n - 1] = delta[n - 2]
+      if n > 2 {
+        for i in 1..<(n - 1) {
+          if delta[i - 1] * delta[i] <= 0 {
+            m[i] = 0
+          } else {
+            let w1 = 2 * h + h
+            let w2 = h + 2 * h
+            m[i] = (w1 + w2) / (w1 / delta[i - 1] + w2 / delta[i])
+          }
+        }
+      }
+      values = y
+      tangents = m
+      spacing = h
+    }
+
+    func evaluate(_ x: Double) -> Double {
+      let n = values.count
+      let h = spacing
+      let i = min(max(Int((x / h).rounded(.down)), 0), n - 2)
+      let t = min(max((x - Double(i) * h) / h, 0), 1)
+      let t2 = t * t, t3 = t2 * t
+      let h00 = 2 * t3 - 3 * t2 + 1
+      let h10 = t3 - 2 * t2 + t
+      let h01 = -2 * t3 + 3 * t2
+      let h11 = t3 - t2
+      return h00 * values[i] + h10 * h * tangents[i] + h01 * values[i + 1]
+        + h11 * h * tangents[i + 1]
+    }
+  }
+
+  static func map(_ input: FilmRGB, response: FilmResponseStage, curves: [PreparedCurve])
+    -> FilmRGB
+  {
     var rgb = (
       srgbToLinear(clampUnit(input.red)),
       srgbToLinear(clampUnit(input.green)),
@@ -122,8 +183,7 @@ enum FilmResponseModel {
     let encoded = [linearToSrgb(rgb.0), linearToSrgb(rgb.1), linearToSrgb(rgb.2)]
     var toned = [0.0, 0.0, 0.0]
     for channel in 0..<3 {
-      toned[channel] = clampUnit(
-        Self.monotoneCubic(response.curves[channel], at: clampUnit(encoded[channel])))
+      toned[channel] = clampUnit(curves[channel].evaluate(clampUnit(encoded[channel])))
     }
 
     // Chroma and hue corrections in OKLab.
@@ -156,12 +216,13 @@ enum FilmResponseModel {
     var floats = [Float]()
     floats.reserveCapacity(dimension * dimension * dimension * 4)
     let step = 1 / Double(dimension - 1)
+    let curves = response.curves.map(PreparedCurve.init)
     for blue in 0..<dimension {
       for green in 0..<dimension {
         for red in 0..<dimension {
           let mapped = map(
             FilmRGB(red: Double(red) * step, green: Double(green) * step, blue: Double(blue) * step),
-            response: response)
+            response: response, curves: curves)
           floats.append(Float(mapped.red))
           floats.append(Float(mapped.green))
           floats.append(Float(mapped.blue))
@@ -177,40 +238,8 @@ enum FilmResponseModel {
   /// Fritsch–Carlson monotone piecewise-cubic interpolation over uniformly
   /// spaced knots; the knot values are made monotone first.
   static func monotoneCubic(_ knots: [Double], at x: Double) -> Double {
-    let n = knots.count
-    guard n >= 2 else { return x }
-    var y = [Double](repeating: 0, count: n)
-    var running = -Double.infinity
-    for i in 0..<n {
-      running = max(running, min(max(knots[i], 0), 1))
-      y[i] = running
-    }
-    let h = 1 / Double(n - 1)
-    var delta = [Double](repeating: 0, count: n - 1)
-    for i in 0..<(n - 1) { delta[i] = (y[i + 1] - y[i]) / h }
-    var m = [Double](repeating: 0, count: n)
-    m[0] = delta[0]
-    m[n - 1] = delta[n - 2]
-    if n > 2 {
-      for i in 1..<(n - 1) {
-        if delta[i - 1] * delta[i] <= 0 {
-          m[i] = 0
-        } else {
-          let w1 = 2 * h + h
-          let w2 = h + 2 * h
-          m[i] = (w1 + w2) / (w1 / delta[i - 1] + w2 / delta[i])
-        }
-      }
-    }
-    let position = x / h
-    let i = min(max(Int(position.rounded(.down)), 0), n - 2)
-    let t = min(max((x - Double(i) * h) / h, 0), 1)
-    let t2 = t * t, t3 = t2 * t
-    let h00 = 2 * t3 - 3 * t2 + 1
-    let h10 = t3 - 2 * t2 + t
-    let h01 = -2 * t3 + 3 * t2
-    let h11 = t3 - t2
-    return h00 * y[i] + h10 * h * m[i] + h01 * y[i + 1] + h11 * h * m[i + 1]
+    guard knots.count >= 2 else { return x }
+    return PreparedCurve(knots).evaluate(x)
   }
 
   /// Periodic piecewise-linear lookup over `bandCount` hue bands.

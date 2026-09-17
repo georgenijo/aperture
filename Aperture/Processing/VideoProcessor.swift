@@ -186,7 +186,7 @@ final class VideoProcessor: @unchecked Sendable {
     let renderSize = CGSize(width: abs(transformedSize.width), height: abs(transformedSize.height))
     let noiseBank = Self.makeNoiseBank(seed: recipe.seed, count: 8, size: 384)
     let decision = FilmProcessingDecision.make(for: recipe)
-    let colorCube = FilmColorCube.data(for: recipe)
+    let colorCubes = FilmColorCube.data(for: recipe)
     let videoComposition = AVMutableVideoComposition(asset: asset) { [weak self] request in
       guard let self else {
         request.finish(
@@ -207,7 +207,7 @@ final class VideoProcessor: @unchecked Sendable {
       do {
         let output = try self.apply(
           recipe: recipe, image: source, extent: source.extent, frameIndex: index,
-          decision: decision, noiseBank: noiseBank, colorCube: colorCube)
+          decision: decision, noiseBank: noiseBank, colorCubes: colorCubes)
         request.finish(with: output, context: self.context)
         let fraction =
           duration.seconds > 0
@@ -272,7 +272,7 @@ final class VideoProcessor: @unchecked Sendable {
 
   private func apply(
     recipe: AppliedFilmRecipe, image: CIImage, extent: CGRect, frameIndex: Int,
-    decision: FilmProcessingDecision, noiseBank: [CIImage], colorCube: Data
+    decision: FilmProcessingDecision, noiseBank: [CIImage], colorCubes: [Data]
   ) throws -> CIImage {
     guard extent.width.isFinite, extent.height.isFinite, extent.width > 0, extent.height > 0 else {
       throw VideoProcessorError.sourceUnreadable
@@ -283,7 +283,9 @@ final class VideoProcessor: @unchecked Sendable {
     let lightLeakAlphaCap = recipe.lightLeak?.alphaCap ?? 0.68
     let grainAmount = recipe.grain?.amount ?? 0
     var output = image.cropped(to: extent)
-    output = FilmColorCube.apply(output, cubeData: colorCube, extent: extent)
+    for cube in colorCubes {
+      output = FilmColorCube.apply(output, cubeData: cube, extent: extent)
+    }
     if halationAmount > 0.001, let bloom = CIFilter(name: "CIBloom") {
       bloom.setValue(output, forKey: kCIInputImageKey)
       bloom.setValue(min(1, halationAmount), forKey: kCIInputIntensityKey)

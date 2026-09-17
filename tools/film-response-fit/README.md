@@ -16,9 +16,11 @@ The pipeline expects them in a scratch directory, `FIT_DIR` (default
 python3 -m venv .venv && .venv/bin/pip install numpy pillow opencv-python-headless scipy
 export FIT_DIR=/tmp/fit && mkdir -p "$FIT_DIR"
 
-# 1. Align each reference shot into its original's pixel frame (SIFT + RANSAC
-#    homography). Originals are the app's preserved `original.heic` converted to
-#    PNG with `sips -s format png`.
+# 1. Convert every input to sRGB first: OpenCV ignores ICC profiles and the app
+#    evaluates the response in sRGB, but iPhone originals are Display P3.
+sips -m "/System/Library/ColorSync/Profiles/sRGB Profile.icc" -s format png original.heic --out original.png
+#    Then align each reference shot into its original's pixel frame (SIFT +
+#    RANSAC homography).
 .venv/bin/python align.py <original.png> <reference.jpg> "$FIT_DIR/pair1"
 .venv/bin/python align.py <original.png> <reference.jpg> "$FIT_DIR/pair2"
 
@@ -48,8 +50,8 @@ two together to half a code value.
    plus per-hue-band additive chroma, hue rotation, and chroma-weighted
    lightness change over eight periodic bands.
 
-Everything is smooth and monotone so the stage bakes cleanly into the 32³
-`CIColorCube` shared by stills and video.
+Every term is smooth and the channel curves are monotone, so the stage bakes
+cleanly into the 32³ `CIColorCube` shared by stills and video.
 
 ## Why a constrained parametric fit and not a free 3D LUT
 

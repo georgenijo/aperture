@@ -1,3 +1,9 @@
+'''Align a reference shot into an original's pixel frame (SIFT + RANSAC homography).
+
+Both inputs MUST already be sRGB-encoded: OpenCV ignores embedded ICC profiles, and the
+app evaluates the response in sRGB. iPhone originals are Display P3, so convert first:
+  sips -m "/System/Library/ColorSync/Profiles/sRGB Profile.icc" -s format png in.heic --out in.png
+'''
 import cv2, numpy as np, sys
 src_path, huji_path, out = sys.argv[1], sys.argv[2], sys.argv[3]
 src = cv2.imread(src_path); huji = cv2.imread(huji_path)

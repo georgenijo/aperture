@@ -160,8 +160,9 @@ final class VideoProcessorTests: XCTestCase {
       try? FileManager.default.removeItem(at: sourceURL)
       try? FileManager.default.removeItem(at: destinationURL)
     }
-    let recipe = makeGradeOnlyRecipe(
-      FilmRecipeCatalog.nineteenNinetyEight.stages.colorGrade ?? .neutral)
+    // The recipe-version-3 1998 grade: persisted v3 videos still re-export
+    // through `FilmColorModel`, so that cube must keep matching the model.
+    let recipe = makeGradeOnlyRecipe(FilmColorModelTests.legacyHujiGrade)
     let outputURL = try await VideoProcessor().process(
       sourceURL: sourceURL, recipe: recipe, destinationURL: destinationURL)
 
@@ -175,6 +176,41 @@ final class VideoProcessorTests: XCTestCase {
     XCTAssertEqual(centre.red, expected.red, accuracy: 8 / 255, "red")
     XCTAssertEqual(centre.green, expected.green, accuracy: 8 / 255, "green")
     XCTAssertEqual(centre.blue, expected.blue, accuracy: 8 / 255, "blue")
+  }
+
+  func testExportedFramesRenderTheFittedFilmResponse() async throws {
+    // The current 1998 recipe grades video through the fitted response, so
+    // a flat wood-toned clip must come out as `FilmResponseModel.map` of
+    // the decoded source sample (within codec noise), not as identity.
+    let response = try XCTUnwrap(FilmRecipeCatalog.nineteenNinetyEight.stages.filmResponse)
+    let wood = FilmRGB(red: 152 / 255, green: 123 / 255, blue: 95 / 255)
+    let sourceURL = try makeTinyVideo(solid: wood)
+    let destinationURL = FileManager.default.temporaryDirectory
+      .appendingPathComponent("aperture-video-response-\(UUID().uuidString).mov")
+    defer {
+      try? FileManager.default.removeItem(at: sourceURL)
+      try? FileManager.default.removeItem(at: destinationURL)
+    }
+    var stages = makeGradeOnlyRecipe(.neutral).stages
+    stages[0] = .filmResponse(response)
+    let recipe = AppliedFilmRecipe(
+      identifier: .nineteenNinetyEight, version: FilmRecipeVersion.current, seed: 1,
+      stages: stages,
+      resolvedSettings: FilmResolvedSettings(
+        lightLeakApplied: false, dateStampConfiguration: .off, dateStampText: nil,
+        timeZoneIdentifier: "GMT"))
+    let outputURL = try await VideoProcessor().process(
+      sourceURL: sourceURL, recipe: recipe, destinationURL: destinationURL)
+
+    let sourceCentre = try await centrePixel(ofVideoAt: sourceURL)
+    let centre = try await centrePixel(ofVideoAt: outputURL)
+    let expected = FilmResponseModel.map(sourceCentre, response: response)
+    XCTAssertEqual(centre.red, expected.red, accuracy: 8 / 255, "red")
+    XCTAssertEqual(centre.green, expected.green, accuracy: 8 / 255, "green")
+    XCTAssertEqual(centre.blue, expected.blue, accuracy: 8 / 255, "blue")
+    // And it is a real grade, not a pass-through of the source.
+    XCTAssertGreaterThan(
+      abs(centre.red - sourceCentre.red) + abs(centre.blue - sourceCentre.blue), 12 / 255)
   }
 
   func testMissingSourceAndUnsupportedRecipeVersionFailBeforeExport() async throws {

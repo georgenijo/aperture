@@ -40,7 +40,10 @@ def unpack(x):
     p=Params(); i=0
     p.matrix=x[i:i+9].reshape(3,3); i+=9
     shared=x[i:i+KNOTS]; i+=KNOTS
-    ch=x[i:i+3*KNOTS].reshape(3,KNOTS); i+=3*KNOTS
+    dr=x[i:i+KNOTS]; i+=KNOTS          # red offset from the shared curve
+    dwarm=x[i:i+KNOTS]; i+=KNOTS       # red minus blue, bounded >= 0: greys can only be warm
+    dg=x[i:i+KNOTS]; i+=KNOTS          # green above the red/blue mean, bounded >= 0: never magenta
+    ch=np.stack([dr, dr-dwarm/2+dg, dr-dwarm])
     p.curves=np.clip(prior+shared+ch,0,1)
     p.sat=x[i:i+3]; i+=3
     p.hueChroma=x[i:i+NBANDS]; i+=NBANDS; p.hueRotate=x[i:i+NBANDS]; i+=NBANDS; p.hueLight=x[i:i+NBANDS]; i+=NBANDS
@@ -55,10 +58,7 @@ def build_resid(keep):
         ea=(oklab_from_lin(srgb_to_lin(pa))-labAH)*np.array([1.0,1.5,1.5])
         gam=np.concatenate([gneg*sw*4, aneg*aw*4, gpos*sw*2, apos*aw*2])   # anchors: centre-ish, no vignette
         slope=np.diff(prior+shared+ch,axis=1)*(KNOTS-1)
-        curves=prior+shared+ch
-        magenta=np.minimum(curves[1]-(curves[0]+curves[2])/2,0)     # green below the red/blue mean -> magenta greys
-        cool=np.minimum(curves[0]-curves[2],0)                        # blue above red -> cool greys
-        reg=[ magenta*120.0, cool*40.0, (p.matrix-np.eye(3)).ravel()*8.0, np.diff(shared,2)*4.0, shared*0.3,
+        reg=[ (p.matrix-np.eye(3)).ravel()*8.0, np.diff(shared,2)*4.0, shared*0.3,
               ch.ravel()*3.0, np.diff(ch,2,axis=1).ravel()*10.0, np.minimum(slope-0.35,0).ravel()*300.0,
               p.hueChroma*1.0, p.hueRotate*1.5, p.hueLight*1.0, (p.sat-1)*1.0 ]
         return np.concatenate([(e*sw[:,None]).ravel(),(ea*aw[:,None]).ravel(),gam]+reg)
@@ -66,11 +66,17 @@ def build_resid(keep):
 x0=np.concatenate([np.eye(3).ravel(), np.zeros(KNOTS), np.zeros(3*KNOTS), np.ones(3), np.zeros(3*NBANDS), [0.2,0.4,1.5]])
 lo=np.full_like(x0,-np.inf); hi=np.full_like(x0,np.inf); i=0
 lo[i:i+9]=-0.15; hi[i:i+9]=1.2; lo[[0,4,8]]=0.7; i+=9
-lo[i:i+KNOTS]=-0.3; hi[i:i+KNOTS]=0.3; i+=KNOTS
-lo[i:i+3*KNOTS]=-0.12; hi[i:i+3*KNOTS]=0.12; i+=3*KNOTS
-lo[i:i+3]=0.4; hi[i:i+3]=1.8; i+=3
-for _ in range(3): lo[i:i+NBANDS]=-0.25; hi[i:i+NBANDS]=0.25; i+=NBANDS
-lo[i:i+3]=[0,0.1,0.8]; hi[i:i+3]=[0.7,0.8,3]
+lo[i:i+KNOTS]=-0.3; hi[i:i+KNOTS]=0.3
+# highlights must still reach white: the last two shared knots are pinned near the prior
+lo[i+KNOTS-2]=-0.04; hi[i+KNOTS-2]=0.04; lo[i+KNOTS-1]=-0.01; hi[i+KNOTS-1]=0.01; i+=KNOTS
+lo[i:i+KNOTS]=-0.12; hi[i:i+KNOTS]=0.12; i+=KNOTS      # dr
+lo[i:i+KNOTS]=0; hi[i:i+KNOTS]=0.10; i+=KNOTS           # dwarm
+lo[i:i+KNOTS]=0; hi[i:i+KNOTS]=0.03; i+=KNOTS           # dg
+lo[i:i+3]=0.5; hi[i:i+3]=1.5; i+=3
+lo[i:i+NBANDS]=-0.25; hi[i:i+NBANDS]=0.25; i+=NBANDS      # hueChroma
+lo[i:i+NBANDS]=-0.15; hi[i:i+NBANDS]=0.15; i+=NBANDS      # hueRotate (~8.6 degrees)
+lo[i:i+NBANDS]=-0.25; hi[i:i+NBANDS]=0.25; i+=NBANDS      # hueLight
+lo[i:i+3]=[0,0.1,0.8]; hi[i:i+3]=[0.45,0.8,3]
 keep=np.ones(len(S),bool)
 for it in range(2):
     r=least_squares(build_resid(keep),x0,bounds=(lo,hi),loss='soft_l1',f_scale=0.04,max_nfev=300,verbose=0)
@@ -82,6 +88,7 @@ json.dump(dict(params=p.to_json(),vignette=v.tolist()),open(f'{FIT_DIR}/fit.json
 np.set_printoptions(linewidth=150)
 print('curves*255\n',(p.curves*255).round(0)); print('matrix\n',p.matrix.round(3)); print('sat',p.sat.round(3))
 print('hueChroma',p.hueChroma.round(3)); print('hueRotate',p.hueRotate.round(3)); print('hueLight',p.hueLight.round(3)); print('vignette',v.round(3))
-print('anchors pred vs huji:'); 
+print('anchors pred vs huji:');
 for a,(s_,h_,w_) in zip(apply(p,AS),anchors): print((a*255).round(0),(h_*255).round(0))
+greys=np.tile(np.linspace(0,1,9)[:,None],(1,3)); print('grey ramp ->', (apply(p,greys)*255).round(0).tolist())
 print('mean abs err (kept)/255:',(np.abs(pred-Hj)[keep].mean(0)*255).round(1))

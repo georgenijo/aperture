@@ -37,6 +37,77 @@ final class FilmResponseModelTests: XCTestCase {
     XCTAssertGreaterThan(white.luminance, 0.9, "white must stay near white")
   }
 
+  func testGreyRampStaysNeutralToWarmUnderTheFittedResponse() throws {
+    // A grey wall must develop as a neutral-to-warm gradient, never with
+    // magenta or green regions: OKLab chroma stays small along the whole
+    // ramp and the tint, where present, points warm (a >= 0, b >= 0).
+    let response = try XCTUnwrap(huji)
+    for step in 0...64 {
+      let value = Double(step) / 64
+      let mapped = FilmResponseModel.map(
+        FilmRGB(red: value, green: value, blue: value), response: response)
+      let lab = FilmResponseModel.oklab(
+        fromLinear: (
+          FilmResponseModel.srgbToLinear(mapped.red),
+          FilmResponseModel.srgbToLinear(mapped.green),
+          FilmResponseModel.srgbToLinear(mapped.blue)
+        ))
+      let chroma = (lab.1 * lab.1 + lab.2 * lab.2).squareRoot()
+      XCTAssertLessThan(chroma, 0.025, "grey \(value) picked up chroma \(chroma)")
+      XCTAssertGreaterThanOrEqual(lab.1, -0.004, "grey \(value) went green")
+      XCTAssertGreaterThanOrEqual(lab.2, -0.004, "grey \(value) went blue")
+      XCTAssertGreaterThanOrEqual(mapped.red, mapped.blue - 0.004, "grey \(value) went cool")
+    }
+  }
+
+  func testCurvesBlockMustBeExactlyThreeChannelsOrFallsBackWholesale() {
+    let identityCurve = FilmResponseStage.identity.curves[0]
+    let black = Array(repeating: 0.0, count: FilmResponseStage.knotCount)
+    // One valid-length row: fall back to three identity curves rather than
+    // blacking out the red channel and filling the rest.
+    let oneRow = FilmResponseStage(
+      matrix: FilmResponseStage.identity.matrix, curves: [black], saturation: [1, 1, 1],
+      hueChroma: [], hueRotate: [], hueLight: [])
+    XCTAssertEqual(oneRow.curves, FilmResponseStage.identity.curves)
+    // Four rows: also wholesale fallback, not "keep the first three".
+    let fourRows = FilmResponseStage(
+      matrix: FilmResponseStage.identity.matrix,
+      curves: [black, identityCurve, identityCurve, identityCurve], saturation: [1, 1, 1],
+      hueChroma: [], hueRotate: [], hueLight: [])
+    XCTAssertEqual(fourRows.curves, FilmResponseStage.identity.curves)
+    // Three rows with one bad inner length: only that row falls back.
+    let mixed = FilmResponseStage(
+      matrix: FilmResponseStage.identity.matrix,
+      curves: [black, [0, 1], identityCurve], saturation: [1, 1, 1],
+      hueChroma: [], hueRotate: [], hueLight: [])
+    XCTAssertEqual(mixed.curves, [black, identityCurve, identityCurve])
+  }
+
+  func testColourCubesFollowStageOrderForStillsAndVideo() throws {
+    // A manifest with both colour stages composes them in array order in
+    // both media paths: the video cube list mirrors the still executor.
+    let response = try XCTUnwrap(huji)
+    let grade = FilmColorModelTests.legacyHujiGrade
+    func recipe(_ stages: [FilmStage]) -> AppliedFilmRecipe {
+      AppliedFilmRecipe(
+        identifier: .nineteenNinetyEight, version: FilmRecipeVersion.current, seed: 1,
+        stages: stages,
+        resolvedSettings: FilmResolvedSettings(
+          lightLeakApplied: false, dateStampConfiguration: .off, dateStampText: nil,
+          timeZoneIdentifier: "GMT"))
+    }
+    let gradeThenResponse = FilmColorCube.data(
+      for: recipe([.colorGrade(grade), .filmResponse(response)]))
+    XCTAssertEqual(gradeThenResponse.count, 2)
+    XCTAssertEqual(gradeThenResponse[0], FilmColorCube.data(grade: grade))
+    XCTAssertEqual(gradeThenResponse[1], FilmColorCube.data(response: response))
+    let responseThenGrade = FilmColorCube.data(
+      for: recipe([.filmResponse(response), .vignette(VignetteStage(amount: 0)), .colorGrade(grade)]))
+    XCTAssertEqual(responseThenGrade[0], FilmColorCube.data(response: response))
+    XCTAssertEqual(responseThenGrade[1], FilmColorCube.data(grade: grade))
+    XCTAssertTrue(FilmColorCube.data(for: recipe([.vignette(VignetteStage(amount: 0))])).isEmpty)
+  }
+
   func testCubeDataMatchesPointwiseMapping() throws {
     let response = try XCTUnwrap(huji)
     let dimension = 8

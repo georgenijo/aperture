@@ -310,8 +310,8 @@ final class FilmStageTests: XCTestCase {
   /// `APERTURE_DUMP_REFERENCE_STATS=1` and pasting the printed rows.
   private let referenceStatistics: [ReferenceKey: ReferenceStatistics] = [
     ReferenceKey(recipe: .nineteenNinetyEight, fixture: "day-portrait"): ReferenceStatistics(
-      mean: 0.4408, standardDeviation: 0.3166, redMean: 0.5020, saturation: 0.5383,
-      blackClip: 0.0122),
+      mean: 0.4595, standardDeviation: 0.3267, redMean: 0.5188, saturation: 0.4979,
+      blackClip: 0.0153),
     ReferenceKey(recipe: .night, fixture: "day-portrait"): ReferenceStatistics(
       mean: 0.4637, standardDeviation: 0.3341, redMean: 0.4914, saturation: 0.4300,
       blackClip: 0.0712),
@@ -322,8 +322,8 @@ final class FilmStageTests: XCTestCase {
       mean: 0.4247, standardDeviation: 0.2533, redMean: 0.4417, saturation: 0.3146,
       blackClip: 0.0015),
     ReferenceKey(recipe: .nineteenNinetyEight, fixture: "night-flash"): ReferenceStatistics(
-      mean: 0.1937, standardDeviation: 0.2585, redMean: 0.2906, saturation: 0.5911,
-      blackClip: 0.1932),
+      mean: 0.1992, standardDeviation: 0.2677, redMean: 0.2896, saturation: 0.5871,
+      blackClip: 0.1934),
     ReferenceKey(recipe: .night, fixture: "night-flash"): ReferenceStatistics(
       mean: 0.1720, standardDeviation: 0.2669, redMean: 0.2297, saturation: 0.2908,
       blackClip: 0.4850),
@@ -334,8 +334,8 @@ final class FilmStageTests: XCTestCase {
       mean: 0.1932, standardDeviation: 0.1953, redMean: 0.2339, saturation: 0.3267,
       blackClip: 0.0777),
     ReferenceKey(recipe: .nineteenNinetyEight, fixture: "hdr-still-life"): ReferenceStatistics(
-      mean: 0.3569, standardDeviation: 0.3148, redMean: 0.4599, saturation: 0.6795,
-      blackClip: 0.0655),
+      mean: 0.3756, standardDeviation: 0.3266, redMean: 0.4727, saturation: 0.6410,
+      blackClip: 0.0650),
     ReferenceKey(recipe: .night, fixture: "hdr-still-life"): ReferenceStatistics(
       mean: 0.3716, standardDeviation: 0.3454, redMean: 0.4399, saturation: 0.5149,
       blackClip: 0.1624),

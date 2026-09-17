@@ -18,11 +18,18 @@ enum FilmColorCube {
     FilmResponseModel.cubeData(dimension: dimension, response: response)
   }
 
-  /// The cube for whichever colour stage a recipe carries. A recipe with
-  /// both uses the fitted response; one with neither grades as identity.
-  static func data(for recipe: AppliedFilmRecipe) -> Data {
-    if let response = recipe.filmResponse { return data(response: response) }
-    return data(grade: recipe.colorGrade)
+  /// One cube per colour stage, in the recipe's array order, so a manifest
+  /// carrying both a `colorGrade` and a `filmResponse` composes them the
+  /// same way in video as `FilmProcessor` does for stills. A recipe with no
+  /// colour stage gets no cube at all (identity).
+  static func data(for recipe: AppliedFilmRecipe) -> [Data] {
+    recipe.stages.compactMap { stage in
+      switch stage {
+      case .colorGrade(let grade): return data(grade: grade)
+      case .filmResponse(let response): return data(response: response)
+      default: return nil
+      }
+    }
   }
 
   private static let sRGB = CGColorSpace(name: CGColorSpace.sRGB)

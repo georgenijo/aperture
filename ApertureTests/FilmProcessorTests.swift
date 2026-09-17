@@ -230,6 +230,34 @@ final class FilmProcessorTests: XCTestCase {
     XCTAssertGreaterThan(centre.red - centre.blue, wood.red - wood.blue + 0.05)
   }
 
+  func testStillsComposeMultipleColourStagesInArrayOrder() async throws {
+    // A manifest carrying both a legacy grade and a fitted response must
+    // render as the composition in array order, the same contract the video
+    // cube list follows.
+    let response = try XCTUnwrap(FilmRecipeCatalog.nineteenNinetyEight.stages.filmResponse)
+    let grade = FilmColorModelTests.legacyHujiGrade
+    let wood = FilmRGB(red: 152 / 255, green: 123 / 255, blue: 95 / 255)
+    let source = try XCTUnwrap(makeSolidImage(wood, width: 64, height: 48))
+    let processor = FilmProcessor(context: CIContext(options: [.useSoftwareRenderer: true]))
+    var stages = makeGradeOnlyRecipe(grade).stages
+    stages.insert(.filmResponse(response), at: 1)
+    let recipe = AppliedFilmRecipe(
+      identifier: .nineteenNinetyEight, version: FilmRecipeVersion.current, seed: 1,
+      stages: stages,
+      resolvedSettings: FilmResolvedSettings(
+        lightLeakApplied: false, dateStampConfiguration: .off, dateStampText: nil,
+        timeZoneIdentifier: "GMT"))
+    let output = try await processor.renderedCGImage(
+      CIImage(cgImage: source), recipe: recipe, renderSize: .preview(maxPixelDimension: 64))
+    let expected = FilmResponseModel.map(
+      FilmColorModel.map(wood, grade: grade), response: response)
+    let centre = try centrePixel(output)
+    // Two chained 32³ cube lookups: allow a little more interpolation error.
+    XCTAssertEqual(centre.red, expected.red, accuracy: 5 / 255, "red")
+    XCTAssertEqual(centre.green, expected.green, accuracy: 5 / 255, "green")
+    XCTAssertEqual(centre.blue, expected.blue, accuracy: 5 / 255, "blue")
+  }
+
   func testChromaticAberrationBlueSeparatesFartherThanRedAndIsDeterministicAcrossSeeds()
     async throws
   {
