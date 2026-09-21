@@ -35,11 +35,24 @@ actor ThumbnailService {
   private var itemGeneration: [UUID: UInt64] = [:]
   private var globalGeneration: UInt64 = 0
   private var didPrepareCache = false
+  /// Test-only synchronization point invoked immediately before the
+  /// unpreemptable decode/encode call in `render(...)`. `nil` on every
+  /// production path; a deterministic test can set this (via
+  /// `setTestRenderGate(_:)`) to pause a request mid-flight — instead of
+  /// racing on a `sleep` — to exercise cancellation while work is
+  /// outstanding.
+  private var testRenderGate: (@Sendable () async -> Void)?
   private static let versionMarkerName = ".aperture-thumbnail-version"
+  /// Default byte budget for the in-memory cache, independent of the disk
+  /// cache format (changing it does not require a
+  /// `ThumbnailCacheVersion`/marker bump — nothing about the persisted JPEG
+  /// bytes or their file names is affected).
+  static let defaultMemoryCostLimitBytes = 64 * 1024 * 1024
 
   init(
     fileManager: FileManager = .default,
-    cacheDirectory: URL? = nil
+    cacheDirectory: URL? = nil,
+    memoryCostLimitBytes: Int = ThumbnailService.defaultMemoryCostLimitBytes
   ) {
     self.fileManager = fileManager
     let systemCache =
@@ -49,7 +62,10 @@ actor ThumbnailService {
       cacheDirectory
       ?? systemCache.appendingPathComponent("ApertureThumbnails", isDirectory: true)
     self.cacheDirectory = base
+    // NSCache treats both limits as advisory. Cost accounts for decoded
+    // bytes, including larger detail-view previews, rather than points.
     memory.countLimit = 240
+    memory.totalCostLimit = memoryCostLimitBytes
   }
 
   func image(
@@ -57,6 +73,7 @@ actor ThumbnailService {
     sourceURL: URL,
     maximumPixelDimension: Int
   ) async throws -> UIImage {
+    try Task.checkCancellation()
     let key = ThumbnailCacheKey(item: item, maximumPixelDimension: maximumPixelDimension)
     let memoryKey = key.fileName as NSString
     if let cached = memory.object(forKey: memoryKey) {
@@ -73,11 +90,37 @@ actor ThumbnailService {
     let itemToken = itemGeneration[item.id, default: 0]
     let globalToken = globalGeneration
     let maximumPixel = max(1, maximumPixelDimension)
-    let rendered = try await Task.detached(priority: .utility) {
+
+    // Nothing above this point has suspended, so this reflects the caller's
+    // own task — e.g. a detail page's `.task(id:)` that SwiftUI just
+    // canceled on a swipe. Check it before handing work to the unstructured
+    // task below: `Task.detached` has its own independent cancellation
+    // state and is never otherwise told the caller gave up.
+    try Task.checkCancellation()
+
+    let renderGate = testRenderGate
+    let detachedRender = Task.detached(priority: .utility) {
+      try Task.checkCancellation()
+      await renderGate?()
       try Task.checkCancellation()
       return try Self.render(sourceURL: sourceURL, maximumPixelDimension: maximumPixel)
-    }.value
+    }
+    // Forward the caller's cancellation into the detached task. A
+    // synchronous Image I/O call already underway inside `Self.render`
+    // cannot be preempted by this — it runs to completion regardless — but
+    // this stops a request that is still queued, or between its decode and
+    // encode steps, from doing further avoidable work.
+    let rendered = try await withTaskCancellationHandler {
+      try await detachedRender.value
+    } onCancel: {
+      detachedRender.cancel()
+    }
 
+    // Re-check the caller's cancellation, not just the generation tokens,
+    // before publishing to the disk and memory caches: a request that
+    // finished rendering after its caller gave up should not populate the
+    // cache with a result nobody asked for anymore.
+    try Task.checkCancellation()
     guard itemGeneration[item.id, default: 0] == itemToken,
       globalGeneration == globalToken
     else {
@@ -90,6 +133,13 @@ actor ThumbnailService {
     }
     remember(rendered.image, key: key.fileName, itemID: item.id)
     return rendered.image
+  }
+
+  /// Test-only hook. Production callers never invoke this; it exists so a
+  /// deterministic test can gate an in-flight render (see `testRenderGate`)
+  /// without any timing assumption.
+  func setTestRenderGate(_ gate: (@Sendable () async -> Void)?) {
+    testRenderGate = gate
   }
 
   func invalidate(itemID: UUID) throws {
@@ -137,9 +187,24 @@ actor ThumbnailService {
   }
 
   private func remember(_ image: UIImage, key: String, itemID: UUID) {
-    memory.setObject(
-      image, forKey: key as NSString, cost: Int(image.size.width * image.size.height))
+    memory.setObject(image, forKey: key as NSString, cost: Self.byteCost(of: image))
     memoryKeysByItem[itemID, default: []].insert(key)
+  }
+
+  /// Resident bytes for `image`, used as the `NSCache` cost so
+  /// `totalCostLimit` reflects actual memory rather than a pixel count (and,
+  /// prior to this, `UIImage.size` in *points* rather than pixels, which
+  /// under-counted anything with `scale` > 1).
+  private static func byteCost(of image: UIImage) -> Int {
+    guard let cgImage = image.cgImage else {
+      // No CGImage backing (unusual for these decoded thumbnails): estimate
+      // generously at 4 bytes/pixel from the pixel dimensions rather than
+      // under-costing the cache.
+      let pixelWidth = image.size.width * image.scale
+      let pixelHeight = image.size.height * image.scale
+      return max(1, Int(pixelWidth * pixelHeight) * 4)
+    }
+    return max(1, cgImage.bytesPerRow * cgImage.height)
   }
 
   private func prepareCacheDirectory() throws {
@@ -193,6 +258,13 @@ actor ThumbnailService {
       }
       source = image
     }
+
+    // The decode above is a synchronous Image I/O call that cannot be
+    // interrupted once started, so cancellation requested mid-decode is
+    // only observed here, after it finishes. Checking now at least avoids
+    // spending the (also synchronous and non-preemptable) JPEG encode below
+    // on a result the caller no longer wants.
+    try Task.checkCancellation()
 
     let data = NSMutableData()
     guard

@@ -1,5 +1,7 @@
 # Release engineering
 
+For the complete engineering → TestFlight → App Store → post-release sequence, see the [App Store release checklist](app-store-release-checklist.md). The historical records below are dated evidence, not current signing or device-discovery status.
+
 ## Build and test commands
 
 ```sh
@@ -28,7 +30,11 @@ Physical iPhone: actual photo and up-to-60-second film capture, microphone permi
 
 Paired iPhone verification may be blocked by an Xcode/device developer disk image or toolchain mismatch. Record the exact Xcode version, iOS build, device model, and error; do not convert a blocked run into a passing release gate.
 
-## Current verification record — 2026-09-15
+## Release-readiness record — 2026-09-21
+
+See the [overnight release report](release-report-2026-09-21.md) for this candidate's audit, changes, automated verification, coverage and remaining physical/production gates.
+
+## Historical verification record — 2026-09-15
 
 - Xcode 26.6 (17F113), iOS 26.5 Simulator: strict Swift concurrency type-check, clean Debug build, static analysis, and all 57 tests passed (53 unit/integration plus 4 UI).
 - Generic iOS device: unsigned Release build and unsigned Release archive both succeeded; the archive contains the arm64 app, dSYM, app icon, permission strings, and `PrivacyInfo.xcprivacy`.

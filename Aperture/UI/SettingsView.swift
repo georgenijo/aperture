@@ -29,28 +29,32 @@ struct SettingsView: View {
                 .accessibilityLabel("Light Leaks")
             }
             settingDivider()
-            settingRow("Date stamp", detail: settings.dateStamp.mode == .off ? "Hidden" : "Printed on frame") {
-              Picker("Date stamp", selection: dateMode) {
-                Text("Off").tag(DateStampMode.off)
-                Text("Actual Date & Time").tag(DateStampMode.current)
-                Text("1998 Date").tag(DateStampMode.nostalgic1998)
-              }
-              .pickerStyle(.menu)
-              .tint(ApertureStyle.amber)
-            }
-            if settings.dateStamp.mode != .off {
-              settingDivider()
-              settingRow("Date format", detail: "How the stamp is printed") {
-                Picker("Date format", selection: dateFormat) {
-                  Text("Digital · 2026/09/15 20:44").tag(DateStampFormat.digitalDateTime)
-                  Text("Huji · 9 15 '98").tag(DateStampFormat.huji)
-                  Text("Local").tag(DateStampFormat.localeAware)
-                  Text("Year Month Day").tag(DateStampFormat.yearMonthDay)
-                  Text("Month Day Year").tag(DateStampFormat.monthDayYear)
-                  Text("Day Month Year").tag(DateStampFormat.dayMonthYear)
+            if isFixedDateStampFilmSelected {
+              fixedDateStampRow
+            } else {
+              settingRow("Date stamp", detail: settings.dateStamp.mode == .off ? "Hidden" : "Printed on frame") {
+                Picker("Date stamp", selection: dateMode) {
+                  Text("Off").tag(DateStampMode.off)
+                  Text("Actual Date & Time").tag(DateStampMode.current)
+                  Text("1998 Date").tag(DateStampMode.nostalgic1998)
                 }
                 .pickerStyle(.menu)
                 .tint(ApertureStyle.amber)
+              }
+              if settings.dateStamp.mode != .off {
+                settingDivider()
+                settingRow("Date format", detail: "How the stamp is printed") {
+                  Picker("Date format", selection: dateFormat) {
+                    Text("Digital · 2026/09/15 20:44").tag(DateStampFormat.digitalDateTime)
+                    Text("Compact · 9 15 '98").tag(DateStampFormat.huji)
+                    Text("Local").tag(DateStampFormat.localeAware)
+                    Text("Year Month Day").tag(DateStampFormat.yearMonthDay)
+                    Text("Month Day Year").tag(DateStampFormat.monthDayYear)
+                    Text("Day Month Year").tag(DateStampFormat.dayMonthYear)
+                  }
+                  .pickerStyle(.menu)
+                  .tint(ApertureStyle.amber)
+                }
               }
             }
           }
@@ -115,7 +119,9 @@ struct SettingsView: View {
             .padding(.bottom, 15)
           }
 
+          #if DEBUG
           performanceGroup
+          #endif
 
           settingsGroup("Privacy", detail: "Your archive stays yours") {
             privacyRow("Processing stays on this iPhone", systemImage: "iphone.and.arrow.forward")
@@ -238,6 +244,32 @@ struct SettingsView: View {
     }
     .padding(.horizontal, 16)
     .padding(.vertical, 13)
+  }
+
+  /// 1998 always resolves its own fixed, compact-format current-date stamp
+  /// (see `FilmRecipe.resolve`); the mode/format controls below would have
+  /// no effect while this film is selected, so they are replaced with an
+  /// honest, non-interactive explanation instead of being shown disabled.
+  private var isFixedDateStampFilmSelected: Bool {
+    settings.selectedFilm == .nineteenNinetyEight
+  }
+
+  private var fixedDateStampRow: some View {
+    HStack(alignment: .top, spacing: 12) {
+      VStack(alignment: .leading, spacing: 3) {
+        Text("Date stamp")
+          .font(.subheadline.weight(.medium))
+          .foregroundStyle(ApertureStyle.bone)
+        Text("1998 always prints a compact stamp of today’s date — it’s part of the look, not a separate setting.")
+          .font(.caption)
+          .foregroundStyle(ApertureStyle.quiet)
+          .fixedSize(horizontal: false, vertical: true)
+      }
+      Spacer(minLength: 8)
+    }
+    .padding(.horizontal, 16)
+    .padding(.vertical, 13)
+    .accessibilityElement(children: .combine)
   }
 
   private func settingDivider() -> some View {

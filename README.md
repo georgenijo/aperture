@@ -32,6 +32,7 @@ The simulator can cover UI, storage/recovery/migration, recipes, and determinist
 
 - [Architecture](film-camera-app-architecture.md)
 - [Release engineering and device checklist](docs/release-engineering.md)
+- [App Store release runbook](docs/app-store-release-checklist.md)
 - [Roadmap](ROADMAP.md)
 - [Historical research and build context](huji-cam-research-and-build-guide.md)
 - [Contributor notes](CLAUDE.md)

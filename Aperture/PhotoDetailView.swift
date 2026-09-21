@@ -32,13 +32,20 @@ struct PhotoDetailView: View {
             .foregroundStyle(ApertureStyle.muted)
         }
       } else {
+        // TabView's own page eagerness/windowing is not something to rely on
+        // (and not something to rewrite paging around), so `isActive` is
+        // computed and passed explicitly: only the current page and its
+        // immediate neighbors decode full-resolution images or create
+        // AVPlayers. Pages further away release what they were holding.
+        let activeIndex = currentIndex
         TabView(selection: $currentID) {
-          ForEach(model.items) { item in
-            DetailPage(item: item, model: model)
+          ForEach(Array(model.items.enumerated()), id: \.element.id) { index, item in
+            DetailPage(item: item, model: model, isActive: abs(index - activeIndex) <= 1)
               .tag(item.id)
           }
         }
-        .tabViewStyle(.page(indexDisplayMode: .automatic))
+        // The toolbar already gives the page count; dots overlap the date caption.
+        .tabViewStyle(.page(indexDisplayMode: .never))
       }
     }
     .navigationBarTitleDisplayMode(.inline)
@@ -90,7 +97,9 @@ struct PhotoDetailView: View {
           Button {
             isExporting = true
             Task {
-              if await model.export([item]) { localNotice = "Saved to Photos." }
+              if let outcome = await model.export([item]) {
+                localNotice = AppModel.exportNoticeText(for: outcome)
+              }
               isExporting = false
             }
           } label: {
@@ -169,10 +178,10 @@ struct PhotoDetailView: View {
 
   private var currentTitle: String {
     guard let item = currentItem else { return "Media" }
-    let recipe = item.recipe.identifier.rawValue
+    return FilmRecipeCatalog.recipe(for: item.recipe.identifier)?.displayName
+      ?? item.recipe.identifier.rawValue
       .replacingOccurrences(of: "aperture.", with: "")
       .capitalized
-    return recipe
   }
 
   private var currentIndex: Int {
@@ -187,9 +196,14 @@ struct PhotoDetailView: View {
 private struct DetailPage: View {
   let item: MediaItem
   @ObservedObject var model: AppModel
+  /// True for the current page and its immediate swipe neighbors. Gates the
+  /// expensive work (full-resolution decode, `AVPlayer` creation) to those
+  /// pages only; see the `isActive` computation in `PhotoDetailView.body`.
+  let isActive: Bool
   @State private var image: UIImage?
   @State private var loadError: String?
   @State private var player: AVPlayer?
+  @State private var retryToken = UUID()
 
   var body: some View {
     ZStack {
@@ -213,18 +227,29 @@ private struct DetailPage: View {
       }
     }
     .task(
-      id: item.id.uuidString + "-" + item.files.processed + "-" + item.processing.phase.rawValue
+      id: isActive.description + "-" + item.id.uuidString + "-" + item.files.processed + "-"
+        + item.processing.phase.rawValue + "-" + retryToken.uuidString
     ) {
+      // Release off-window media and invalidate a replaced asset. An unchanged
+      // active page keeps the same task identity and does not reload on a swipe.
+      player?.pause()
+      player = nil
+      image = nil
+      loadError = nil
+      guard isActive else { return }
       await load()
     }
-    .overlay(alignment: .bottom) {
+    .overlay(alignment: item.mediaType == .video ? .top : .bottom) {
+      // The system video transport controls sit at the bottom of the
+      // player; keep the capture-date caption from covering them by pinning
+      // it to the top for video pages instead.
       Text(item.capturedAt.formatted(date: .abbreviated, time: .shortened))
         .font(.caption2.weight(.medium))
         .foregroundStyle(ApertureStyle.bone.opacity(0.8))
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
         .background(.black.opacity(0.45), in: Capsule())
-        .padding(.bottom, 14)
+        .padding(item.mediaType == .video ? .top : .bottom, 14)
         .accessibilityLabel("Captured")
         .accessibilityValue(item.capturedAt.formatted(date: .abbreviated, time: .shortened))
     }
@@ -259,7 +284,7 @@ private struct DetailPage: View {
         ApertureStyle.bone)
       Text(message).font(.subheadline).foregroundStyle(ApertureStyle.muted)
         .multilineTextAlignment(.center).padding(.horizontal, 34)
-      Button("Try Again") { Task { await load() } }
+      Button("Try Again") { retryToken = UUID() }
         .buttonStyle(.borderedProminent).tint(ApertureStyle.amber).foregroundStyle(
           ApertureStyle.ink)
     }

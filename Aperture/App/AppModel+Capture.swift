@@ -73,9 +73,9 @@ extension AppModel {
           processed: source,
           original: context.preserveOriginal ? source : nil
         )
-        await self.refresh()
+        await self.syncAfterMutation()
         try await self.mediaLibrary.updateProcessing(item.processing.nextAttempt, for: item.id)
-        await self.refresh()
+        await self.syncAfterMutation()
         await self.developVideo(item: item, autoSaveToPhotos: context.autoSaveToPhotos)
       } catch {
         var reportedError: Error = error
@@ -144,9 +144,9 @@ extension AppModel {
           processed: MediaAssetPayload(data: captured.data, fileExtension: captured.fileExtension),
           original: original
         )
-        await self.refresh()
+        await self.syncAfterMutation()
         try await self.mediaLibrary.updateProcessing(item.processing.nextAttempt, for: item.id)
-        await self.refresh()
+        await self.syncAfterMutation()
         try await self.develop(item: item, sourceData: captured.data)
       } catch {
         var reportedError: Error = error
@@ -180,7 +180,7 @@ extension AppModel {
             operation: "read", path: item.id.uuidString, details: "The source file is missing.")
         }
         try await mediaLibrary.updateProcessing(item.processing.nextAttempt, for: item.id)
-        await refresh()
+        await syncAfterMutation()
         await developVideo(item: item, autoSaveToPhotos: settings.autoSaveToPhotos)
       } catch {
         processingIDs.remove(item.id)
@@ -199,7 +199,7 @@ extension AppModel {
         try Data(contentsOf: sourceURL)
       }.value
       try await mediaLibrary.updateProcessing(item.processing.nextAttempt, for: item.id)
-      await refresh()
+      await syncAfterMutation()
       try await develop(item: item, sourceData: sourceData)
     } catch {
       processingIDs.remove(item.id)
@@ -263,7 +263,7 @@ extension AppModel {
         let migratedItem = try await mediaLibrary.updateRecipe(migratedRecipe, for: item.id)
         try await mediaLibrary.updateProcessing(migratedItem.processing.nextAttempt, for: item.id)
         processingIDs.insert(item.id)
-        await refresh()
+        await syncAfterMutation()
         try await develop(
           item: migratedItem,
           sourceData: sourceData,
@@ -304,15 +304,10 @@ extension AppModel {
       )
     }.value
 
-    let updatedItem = try await mediaLibrary.replaceProcessedAsset(
-      for: item.id,
-      with: MediaAssetPayload(data: encoded, fileExtension: "jpg"),
-      dimensions: item.dimensions,
-      durationSeconds: item.durationSeconds,
-      processing: .ready
-    )
+    let updatedItem = try await replaceDevelopedAsset(
+      for: item, with: MediaAssetPayload(data: encoded, fileExtension: "jpg"))
     processingIDs.remove(item.id)
-    await refresh()
+    await syncAfterMutation()
 
     if autoSaveToPhotos ?? settings.autoSaveToPhotos,
       let url = try await mediaLibrary.assetURL(for: updatedItem, kind: .processed)
@@ -342,15 +337,9 @@ extension AppModel {
       )
       defer { try? FileManager.default.removeItem(at: outputURL) }
       let processed = MediaAssetPayload(fileURL: outputURL, fileExtension: outputURL.pathExtension)
-      let updatedItem = try await mediaLibrary.replaceProcessedAsset(
-        for: item.id,
-        with: processed,
-        dimensions: item.dimensions,
-        durationSeconds: item.durationSeconds,
-        processing: .ready
-      )
+      let updatedItem = try await replaceDevelopedAsset(for: item, with: processed)
       processingIDs.remove(item.id)
-      await refresh()
+      await syncAfterMutation()
       if autoSaveToPhotos,
         let url = try await mediaLibrary.assetURL(for: updatedItem, kind: .processed)
       {
@@ -385,6 +374,41 @@ extension AppModel {
       // flag. Do not persist capability as if it were capture fact.
       isMacroEnabled: false
     )
+  }
+
+  /// A replacement can commit before cleanup throws, or leave authoritative
+  /// metadata ahead of the manifest after an uncertain rollback. Recover only
+  /// at this boundary: an unrelated read/render failure must not be mistaken
+  /// for success just because the old item was already ready.
+  private func replaceDevelopedAsset(
+    for item: MediaItem, with payload: MediaAssetPayload
+  ) async throws -> MediaItem {
+    do {
+      return try await mediaLibrary.replaceProcessedAsset(
+        for: item.id, with: payload, dimensions: item.dimensions,
+        durationSeconds: item.durationSeconds, processing: .ready)
+    } catch {
+      let replacementError = error
+      func recoveredReplacement() -> MediaItem? {
+        items.first {
+          $0.id == item.id && $0.processing.phase == .ready
+            && $0.files.processed != item.files.processed
+        }
+      }
+
+      // A post-commit cleanup failure already has authoritative actor state.
+      // Otherwise reconcile metadata, then read state even if writing the
+      // repaired index failed: metadata remains the durable source of truth.
+      await syncAfterMutation()
+      if recoveredReplacement() == nil {
+        await refresh()
+        await syncAfterMutation()
+      }
+      guard let recovered = recoveredReplacement() else { throw replacementError }
+      notice =
+        "Developed locally. Storage cleanup needs attention: \(replacementError.localizedDescription)"
+      return recovered
+    }
   }
 
   private func markProcessingFailed(_ id: UUID, error: Error) async {

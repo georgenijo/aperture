@@ -230,6 +230,188 @@ final class MediaLibraryTests: XCTestCase {
     XCTAssertEqual(try Data(contentsOf: url), Data("photo".utf8))
   }
 
+  func testCurrentSnapshotMirrorsMutationsWithoutRunningDiskReconciliation() async throws {
+    let root = try temporaryDirectory(named: "current-snapshot-mutations")
+    let library = MediaLibrary(rootURL: root)
+    _ = try await library.prepare()
+
+    // Create: currentSnapshot() sees a just-committed item immediately.
+    let item = try await library.createAndCommit(
+      TestMediaFactory.makeWriteRequest(),
+      processed: MediaAssetPayload(data: Data("photo".utf8), fileExtension: "jpg")
+    )
+    var snapshot = await library.currentSnapshot()
+    XCTAssertEqual(snapshot.items.map(\.id), [item.id])
+    XCTAssertEqual(snapshot.items.first?.processing.phase, .ready)
+
+    // Processing transition (the "every capture processing state" case).
+    try await library.updateProcessing(.pending, for: item.id)
+    snapshot = await library.currentSnapshot()
+    XCTAssertEqual(snapshot.items.first?.processing.phase, .pending)
+
+    try await library.updateProcessing(.ready, for: item.id)
+    snapshot = await library.currentSnapshot()
+    XCTAssertEqual(snapshot.items.first?.processing.phase, .ready)
+
+    // Favorite.
+    try await library.setFavorite(true, for: item.id)
+    snapshot = await library.currentSnapshot()
+    XCTAssertEqual(snapshot.items.first?.isFavorite, true)
+
+    // Replace (the develop()/developVideo() completion path).
+    let replaced = try await library.replaceProcessedAsset(
+      for: item.id,
+      with: MediaAssetPayload(data: Data("developed".utf8), fileExtension: "jpg"),
+      dimensions: item.dimensions,
+      durationSeconds: item.durationSeconds,
+      processing: .ready
+    )
+    snapshot = await library.currentSnapshot()
+    XCTAssertEqual(snapshot.items.first?.files, replaced.files)
+    let replacementAssetURL = try await library.assetURL(for: replaced, kind: .processed)
+    let replacedURL = try XCTUnwrap(replacementAssetURL)
+    XCTAssertEqual(try Data(contentsOf: replacedURL), Data("developed".utf8))
+
+    // Delete.
+    _ = try await library.delete(id: item.id)
+    snapshot = await library.currentSnapshot()
+    XCTAssertTrue(snapshot.items.isEmpty)
+  }
+
+  func testCurrentSnapshotSkipsReconciliationThatRefreshSnapshotPerforms() async throws {
+    let root = try temporaryDirectory(named: "current-snapshot-vs-refresh")
+    let library = MediaLibrary(rootURL: root)
+    _ = try await library.prepare()
+
+    // Stage (but never commit) a transaction directly on disk, mirroring a
+    // completed-but-uncommitted transaction left by a previous process. This
+    // is the same setup as testCompleteStagingIsRecoveredDuringLiveRefresh.
+    let staged = try await library.stage(
+      TestMediaFactory.makeWriteRequest(),
+      processed: MediaAssetPayload(data: Data("photo".utf8), fileExtension: "jpg")
+    )
+
+    // currentSnapshot() must not discover it: it never touches disk, only
+    // the actor's own in-memory index, which nothing has told about this
+    // staged item yet.
+    let lightweight = await library.currentSnapshot()
+    XCTAssertTrue(lightweight.items.isEmpty)
+    XCTAssertFalse(lightweight.diagnostics.contains { $0.code == .recoveredStagedItem })
+
+    // refreshSnapshot() is the explicit, disk-reconciling path and does
+    // recover it, exactly as testCompleteStagingIsRecoveredDuringLiveRefresh
+    // already establishes for the pre-existing API.
+    let reconciled = try await library.refreshSnapshot()
+    XCTAssertEqual(reconciled.items.map(\.id), [staged.item.id])
+    XCTAssertTrue(reconciled.diagnostics.contains { $0.code == .recoveredStagedItem })
+
+    // Once refreshSnapshot() has folded the recovered item into the
+    // in-memory index, currentSnapshot() reflects it too without needing
+    // another disk scan.
+    let afterReconciliation = await library.currentSnapshot()
+    XCTAssertEqual(afterReconciliation.items.map(\.id), [staged.item.id])
+  }
+
+  func testCurrentSnapshotSkipsReconciliationOfExternallyWrittenCommittedItems() async throws {
+    let root = try temporaryDirectory(named: "current-snapshot-vs-refresh-committed")
+    let library = MediaLibrary(rootURL: root)
+    _ = try await library.prepare()
+
+    // Write a fully-formed committed item directly to disk, bypassing this
+    // actor's stage/commit path entirely. This is a deterministic stand-in
+    // for a directory that appeared without this actor ever being told
+    // about it (a previous process's commit, or a file manager change),
+    // exercising reconcileCommittedItems specifically rather than the
+    // staged-creation path above.
+    let foreignID = UUID()
+    let foreignItem = TestMediaFactory.makeItem(id: foreignID)
+    let itemDirectory =
+      root
+      .appendingPathComponent(MediaLibraryPaths.media)
+      .appendingPathComponent(foreignID.uuidString.lowercased(), isDirectory: true)
+    try FileManager.default.createDirectory(at: itemDirectory, withIntermediateDirectories: true)
+    try Data("external-photo".utf8).write(
+      to: itemDirectory.appendingPathComponent("processed.jpg"))
+    let metadata = try ApertureJSON.makeEncoder().encode(foreignItem)
+    try metadata.write(to: itemDirectory.appendingPathComponent(MediaLibraryPaths.itemMetadata))
+
+    // currentSnapshot() must not discover it: it only mirrors the actor's
+    // in-memory index, and nothing on this actor has learned about this
+    // directory.
+    let lightweight = await library.currentSnapshot()
+    XCTAssertTrue(lightweight.items.isEmpty)
+
+    // refreshSnapshot() is the explicit, disk-reconciling path and does
+    // recover it.
+    let reconciled = try await library.refreshSnapshot()
+    XCTAssertEqual(reconciled.items.map(\.id), [foreignID])
+    XCTAssertTrue(reconciled.diagnostics.contains { $0.code == .recoveredCommittedItem })
+
+    // Once reconciled, currentSnapshot() reflects it without another scan.
+    let afterReconciliation = await library.currentSnapshot()
+    XCTAssertEqual(afterReconciliation.items.map(\.id), [foreignID])
+  }
+
+  /// Opt-in, non-flaky performance measurement: repeated `currentSnapshot()`
+  /// against repeated `refreshSnapshot()` over a committed library of many
+  /// tiny items. It only prints observed timings (there is no pass/fail
+  /// threshold, since simulator/CI hardware speed varies) so it never fails
+  /// the ordinary suite. Run explicitly with:
+  ///   TEST_RUNNER_APERTURE_RUN_SNAPSHOT_PERF=1 xcodebuild ... \
+  ///     -only-testing:ApertureTests/MediaLibraryTests/testSnapshotPerformanceCurrentVersusRefresh test
+  func testSnapshotPerformanceCurrentVersusRefresh() async throws {
+    guard ProcessInfo.processInfo.environment["APERTURE_RUN_SNAPSHOT_PERF"] != nil else {
+      throw XCTSkip(
+        "Set APERTURE_RUN_SNAPSHOT_PERF=1 to run this opt-in performance measurement.")
+    }
+
+    let root = try temporaryDirectory(named: "snapshot-performance")
+    let library = MediaLibrary(rootURL: root)
+    _ = try await library.prepare()
+
+    let itemCount = 100
+    for _ in 0..<itemCount {
+      _ = try await library.createAndCommit(
+        TestMediaFactory.makeWriteRequest(),
+        processed: MediaAssetPayload(data: Data("tiny".utf8), fileExtension: "jpg")
+      )
+    }
+
+    let iterations = 20
+    let lightweightElapsed = await measureSeconds {
+      for _ in 0..<iterations {
+        _ = await library.currentSnapshot()
+      }
+    }
+    let reconcilingElapsed = try await measureSeconds {
+      for _ in 0..<iterations {
+        _ = try await library.refreshSnapshot()
+      }
+    }
+
+    print(
+      """
+      [snapshot-performance] \(itemCount) items, \(iterations) iterations each:
+        currentSnapshot()  total \(lightweightElapsed) s, \
+      \(lightweightElapsed / Double(iterations)) s/call
+        refreshSnapshot()  total \(reconcilingElapsed) s, \
+      \(reconcilingElapsed / Double(iterations)) s/call
+      """)
+
+    // No speed assertion: only a sanity check that both paths still agree on
+    // the item count, so a broken measurement harness fails loudly instead
+    // of silently reporting bogus numbers.
+    let finalLightweight = await library.currentSnapshot()
+    XCTAssertEqual(finalLightweight.items.count, itemCount)
+  }
+
+  private func measureSeconds(_ work: () async throws -> Void) async rethrows -> Double {
+    let start = DispatchTime.now()
+    try await work()
+    let end = DispatchTime.now()
+    return Double(end.uptimeNanoseconds &- start.uptimeNanoseconds) / 1_000_000_000
+  }
+
   func testIncompleteStagingIsQuarantinedWithoutPublishingItem() async throws {
     let root = try temporaryDirectory(named: "library")
     let firstLibrary = MediaLibrary(rootURL: root)

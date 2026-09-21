@@ -31,7 +31,7 @@ struct FilmPickerView: View {
         }
       }
     }
-    .presentationDetents([.medium])
+    .presentationDetents([.medium, .large])
     .presentationDragIndicator(.visible)
     .preferredColorScheme(.dark)
   }

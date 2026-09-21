@@ -1,4 +1,5 @@
 import CoreGraphics
+import SwiftUI
 import XCTest
 
 @testable import Aperture
@@ -142,5 +143,53 @@ final class CameraLogicTests: XCTestCase {
       CameraLifecycleLogic.shouldResumeSession(
         isWanted: true, isRunning: false, isInterrupted: false, isRecording: false,
         isDeviceConnected: false))
+  }
+
+  func testSceneLifecyclePolicyActivatesOnlyWhenActiveAndNothingIsPresented() {
+    XCTAssertEqual(
+      CameraScenePolicy.action(for: .active, isLabPresented: false, isSettingsPresented: false),
+      .activate)
+    XCTAssertEqual(
+      CameraScenePolicy.action(for: .active, isLabPresented: true, isSettingsPresented: false),
+      .doNothing)
+    XCTAssertEqual(
+      CameraScenePolicy.action(for: .active, isLabPresented: false, isSettingsPresented: true),
+      .doNothing)
+  }
+
+  func testSceneLifecyclePolicyOnlyStopsRecordingOnBackground() {
+    XCTAssertEqual(
+      CameraScenePolicy.action(for: .background, isLabPresented: false, isSettingsPresented: false),
+      .stopRecordingAndDeactivate)
+    // .inactive covers transient system UI (control center, a call banner)
+    // and must not tear the session down; only .background does.
+    XCTAssertEqual(
+      CameraScenePolicy.action(for: .inactive, isLabPresented: false, isSettingsPresented: false),
+      .doNothing)
+  }
+
+  func testFocusIndicatorOnlyExpiresWhenItsOwnTokenIsStillCurrent() {
+    XCTAssertTrue(FocusIndicatorLogic.shouldExpire(scheduledToken: 1, currentToken: 1))
+    // A newer tap has replaced the current token by the time the older
+    // tap's hide timer fires; that timer must not hide the newer indicator.
+    XCTAssertFalse(FocusIndicatorLogic.shouldExpire(scheduledToken: 1, currentToken: 2))
+  }
+
+  func testSessionStopAfterRecordingOnlyAppliesWhenStillUnwantedOrBlocked() {
+    XCTAssertTrue(
+      CameraRecordingLogic.shouldStopSessionAfterRecording(
+        wasRequestedForSystemReason: true, sessionWanted: false, isSessionBlocked: false))
+    XCTAssertTrue(
+      CameraRecordingLogic.shouldStopSessionAfterRecording(
+        wasRequestedForSystemReason: true, sessionWanted: true, isSessionBlocked: true))
+    // The interruption/pressure that originally requested the stop has
+    // already cleared by the time the movie file closes: must not force an
+    // unnecessary foreground stop/restart.
+    XCTAssertFalse(
+      CameraRecordingLogic.shouldStopSessionAfterRecording(
+        wasRequestedForSystemReason: true, sessionWanted: true, isSessionBlocked: false))
+    XCTAssertFalse(
+      CameraRecordingLogic.shouldStopSessionAfterRecording(
+        wasRequestedForSystemReason: false, sessionWanted: false, isSessionBlocked: false))
   }
 }

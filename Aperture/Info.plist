@@ -18,6 +18,15 @@
 	<string>$(MARKETING_VERSION)</string>
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
+	<key>UIUserInterfaceStyle</key>
+	<string>Dark</string>
+	<key>UILaunchScreen</key>
+	<dict>
+		<key>UIColorName</key>
+		<string>Ink</string>
+	</dict>
 	<key>NSCameraUsageDescription</key>
 	<string>Aperture uses the camera to capture the photographs and short films you choose to make.</string>
 	<key>NSMicrophoneUsageDescription</key>

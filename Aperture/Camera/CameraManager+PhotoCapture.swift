@@ -161,7 +161,12 @@ extension CameraManager {
     completion: (@Sendable (Result<CapturedPhoto, CameraIssue>) -> Void)?
   ) {
     let callback = completion ?? onPhotoCaptured
-    publish { $0.isCapturing = false }
+    // This request was refused before (or immediately after) it was added to
+    // `captureRequests`, but other captures admitted earlier can still be in
+    // flight. Publishing an unconditional `false` here would hide the
+    // indicator for those, not just this refused one.
+    let isCapturing = !captureRequests.isEmpty
+    publish { $0.isCapturing = isCapturing }
     DispatchQueue.main.async { callback?(result) }
   }
 

@@ -298,8 +298,11 @@ extension CameraManager {
       publish { $0.publishRecordingFinished(duration: duration) }
       let completedDespiteError =
         (error as NSError?)?.userInfo[AVErrorRecordingSuccessfullyFinishedKey] as? Bool == true
-      let shouldStopSession = stopSessionWhenRecordingFinishes
+      let wasStoppedForSystemReason = stopSessionWhenRecordingFinishes
       stopSessionWhenRecordingFinishes = false
+      let shouldStopSession = CameraRecordingLogic.shouldStopSessionAfterRecording(
+        wasRequestedForSystemReason: wasStoppedForSystemReason, sessionWanted: sessionWanted,
+        isSessionBlocked: isSessionBlocked)
       let shouldRebuild = rebuildAfterRecordingFinishes
       let movieExists = FileManager.default.fileExists(atPath: url.path)
       let recordingFailed = (error != nil && !completedDespiteError) || !movieExists
@@ -349,8 +352,10 @@ extension CameraManager {
       if shouldRebuild {
         rebuildAfterRecordingFinishes = false
         rebuildGraphAfterMediaServicesResetOnQueue()
-      } else if shouldStopSession {
-        // The interruption that forced this stop may already be over.
+      } else if wasStoppedForSystemReason {
+        // Whether or not the stop above actually ran, the interruption or
+        // pressure state that originally prompted it may since have
+        // cleared; ask again now that the file has closed.
         resumeSessionIfWantedOnQueue()
       }
     }

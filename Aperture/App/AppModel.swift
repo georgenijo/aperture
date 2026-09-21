@@ -30,7 +30,11 @@ final class AppModel: ObservableObject {
   let uiTestEmptyLibrary: Bool
   let uiTestSeededLibrary: Bool
 
-  var recordingContext: RecordingContext?
+  @Published var recordingContext: RecordingContext?
+
+  /// The persisted capture context spans the camera-queue acknowledgement and
+  /// final callback too, so navigation cannot race a starting or closing movie.
+  var isRecordingOrStarting: Bool { isRecording || recordingContext != nil }
   private var cancellables: Set<AnyCancellable> = []
   var dismissedCameraIssue: CameraIssue?
 
@@ -174,6 +178,21 @@ final class AppModel: ObservableObject {
     }
   }
 
+  /// Mirrors published state to the media library actor's current in-memory
+  /// index after a mutation this call site just performed successfully.
+  /// Unlike `refresh()`, this never triggers disk reconciliation, so it is
+  /// the right call after a capture's processing transitions, a favorite
+  /// toggle, or a delete — the mutation itself already made the change
+  /// durable, so re-scanning the library folder again here is redundant.
+  /// Startup recovery, the Lab's `.task` refresh, and any error or otherwise
+  /// uncertain outcome must keep calling `refresh()` so a crash or an
+  /// externally modified file is still reconciled.
+  func syncAfterMutation() async {
+    let snapshot = await mediaLibrary.currentSnapshot()
+    diagnostics = snapshot.diagnostics
+    items = uiTestEmptyLibrary ? [] : snapshot.items
+  }
+
   func updateSettings(_ value: AppSettings) {
     settings = value
     do {
@@ -201,7 +220,7 @@ final class AppModel: ObservableObject {
   }
 
   func setCaptureMode(_ mode: CameraCaptureMode) {
-    guard !isRecording else {
+    guard !isRecordingOrStarting else {
       notice = "Stop the recording before changing modes."
       return
     }
@@ -217,6 +236,7 @@ final class AppModel: ObservableObject {
   }
 
   func startRecording() {
+    guard !isRecordingOrStarting else { return }
     guard cameraAuthorizationStatus == .authorized else {
       notice = "Camera access is required to record a video."
       return
@@ -362,6 +382,18 @@ final class AppModel: ObservableObject {
         (
           Self.uiTestSecondSeedID, Date(timeIntervalSince1970: 1_699_999_000),
           UIColor(red: 0.18, green: 0.42, blue: 0.72, alpha: 1), 0xB8F3_9D21
+        ),
+        (
+          UUID(uuidString: "C9D6CB0A-5126-4D5C-BFF6-80CD6D16C310")!,
+          Date(timeIntervalSince1970: 1_699_998_000), .systemGreen, 0xC9A4_1E32
+        ),
+        (
+          UUID(uuidString: "DAE7DC1B-6237-4E6D-A007-91DE7E27D421")!,
+          Date(timeIntervalSince1970: 1_699_997_000), .systemPurple, 0xDAB5_2F43
+        ),
+        (
+          UUID(uuidString: "EBF8ED2C-7348-4F7E-B118-A2EF8F38E532")!,
+          Date(timeIntervalSince1970: 1_699_996_000), .systemTeal, 0xEBC6_3054
         ),
       ]
 
