@@ -263,4 +263,78 @@ final class MediaModelsTests: XCTestCase {
     XCTAssertEqual(
       try decoder.decode(MediaProcessingState.self, from: legacyFailedJSON).attemptCount, 3)
   }
+
+  // MARK: - Export selection/outcome (release readiness P2)
+  //
+  // `AppModel.export(_:)` builds its Photos asset list directly from
+  // `AppModel.exportPlan(for:).readyItems`, so exercising that pure selection
+  // here (rather than a separate reimplementation) is exercising the exact
+  // plan the real exporter uses — no Photos permission or mediaLibrary I/O
+  // needed to make these tests meaningful.
+
+  private func makeExportTestMediaItem(phase: MediaProcessingState) -> MediaItem {
+    let capturedAt = Date(timeIntervalSince1970: 1_700_000_000)
+    let recipe = FilmRecipeCatalog.night.resolve(
+      seed: 1, capturedAt: capturedAt,
+      options: FilmProcessingOptions(lightLeaksEnabled: true, dateStamp: .off),
+      timeZone: .gmt)
+    return MediaItem(
+      mediaType: .photo,
+      files: MediaFileSet(processed: "media/export-test/processed.jpg", original: nil, thumbnail: nil),
+      dimensions: PixelDimensions(width: 12, height: 8),
+      durationSeconds: nil,
+      capturedAt: capturedAt,
+      recipe: recipe,
+      camera: nil,
+      processing: phase
+    )
+  }
+
+  func testExportPlanSeparatesReadyItemsFromSkippedNonReadyOnes() {
+    let ready1 = makeExportTestMediaItem(phase: .ready)
+    let pending = makeExportTestMediaItem(phase: .pending)
+    let processing = makeExportTestMediaItem(phase: .processing(attemptCount: 1))
+    let failed = makeExportTestMediaItem(
+      phase: .failed(
+        MediaProcessingFailure(
+          code: .renderFailed, message: "boom", isRecoverable: true, attemptCount: 1)))
+    let ready2 = makeExportTestMediaItem(phase: .ready)
+
+    // A realistic mixed selection: two ready items interleaved with a
+    // pending, a processing, and a failed one.
+    let selection = [ready1, pending, processing, failed, ready2]
+    let plan = AppModel.exportPlan(for: selection)
+
+    XCTAssertEqual(plan.readyItems.map(\.id), [ready1.id, ready2.id])
+    XCTAssertEqual(plan.skippedCount, 3)
+  }
+
+  func testExportPlanSkipsEveryItemWhenNoneAreReady() {
+    let pending = makeExportTestMediaItem(phase: .pending)
+    let processing = makeExportTestMediaItem(phase: .processing(attemptCount: 2))
+    let failed = makeExportTestMediaItem(
+      phase: .failed(
+        MediaProcessingFailure(
+          code: .sourceMissing, message: "gone", isRecoverable: false, attemptCount: 1)))
+
+    let plan = AppModel.exportPlan(for: [pending, processing, failed])
+
+    XCTAssertTrue(plan.readyItems.isEmpty)
+    XCTAssertEqual(plan.skippedCount, 3)
+  }
+
+  func testExportNoticeTextReflectsActualOutcomeIncludingSkippedCount() {
+    XCTAssertEqual(
+      AppModel.exportNoticeText(for: AppModel.ExportOutcome(exportedCount: 1, skippedCount: 0)),
+      "Saved to Photos.")
+    XCTAssertEqual(
+      AppModel.exportNoticeText(for: AppModel.ExportOutcome(exportedCount: 2, skippedCount: 0)),
+      "Saved 2 media items to Photos.")
+    XCTAssertEqual(
+      AppModel.exportNoticeText(for: AppModel.ExportOutcome(exportedCount: 1, skippedCount: 1)),
+      "Saved to Photos. 1 item wasn’t ready yet and was skipped.")
+    XCTAssertEqual(
+      AppModel.exportNoticeText(for: AppModel.ExportOutcome(exportedCount: 1, skippedCount: 2)),
+      "Saved to Photos. 2 items weren’t ready yet and were skipped.")
+  }
 }

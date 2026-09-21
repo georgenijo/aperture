@@ -107,6 +107,31 @@ enum CameraRecordingLogic {
     guard let startedAt else { return 0 }
     return max(0, now.timeIntervalSince(startedAt))
   }
+
+  /// A recording can be told to stop the session for a system reason
+  /// (backgrounding, an interruption, a thermal shutdown) well before the
+  /// delegate callback that actually applies it runs, since that callback
+  /// only fires once the movie file has finished closing. Re-derive whether
+  /// the stop is still warranted from the state at the moment the callback
+  /// fires rather than the state at the moment the stop was requested, so a
+  /// foreground session whose interruption already ended is not torn down
+  /// and immediately restarted.
+  static func shouldStopSessionAfterRecording(
+    wasRequestedForSystemReason: Bool, sessionWanted: Bool, isSessionBlocked: Bool
+  ) -> Bool {
+    wasRequestedForSystemReason && (!sessionWanted || isSessionBlocked)
+  }
+}
+
+enum FocusIndicatorLogic {
+  /// A focus indicator is shown on a timer started at the moment of the tap.
+  /// A second tap starts its own indicator and its own timer before the
+  /// first one fires; without this check, the first timer's expiry would
+  /// hide the second tap's indicator early. Only the hide scheduled by the
+  /// still-current tap may take effect.
+  static func shouldExpire<Token: Equatable>(scheduledToken: Token, currentToken: Token) -> Bool {
+    scheduledToken == currentToken
+  }
 }
 
 enum CameraLifecycleLogic {

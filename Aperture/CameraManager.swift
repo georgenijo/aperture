@@ -109,16 +109,22 @@ final class CameraManager: NSObject, ObservableObject, @unchecked Sendable {
     }
   }
 
+  /// Whether AVFoundation currently has the graph held down for a reason the
+  /// app did not choose: an active interruption or a thermal shutdown. Kept
+  /// distinct from `sessionWanted`, which tracks what the UI asked for.
+  var isSessionBlocked: Bool {
+    session.isInterrupted || pressureShutdownActive
+  }
+
   /// Restart a session the system stopped, once the UI still wants it and
   /// nothing (interruption, pressure, an open movie file) blocks it.
   func resumeSessionIfWantedOnQueue() {
-    let isBlocked = session.isInterrupted || pressureShutdownActive
     // A disconnect during recording keeps the stale input until the movie
     // closes; restarting on it would overwrite the "disconnected" state.
     let isDeviceConnected = currentInput?.device.isConnected ?? true
     guard
       CameraLifecycleLogic.shouldResumeSession(
-        isWanted: sessionWanted, isRunning: session.isRunning, isInterrupted: isBlocked,
+        isWanted: sessionWanted, isRunning: session.isRunning, isInterrupted: isSessionBlocked,
         isRecording: recordingStartedAt != nil || movieOutput.isRecording,
         isDeviceConnected: isDeviceConnected)
     else { return }

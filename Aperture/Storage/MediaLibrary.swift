@@ -87,6 +87,25 @@ actor MediaLibrary {
     return snapshot()
   }
 
+  /// The actor's in-memory index, published without any disk reconciliation.
+  /// Every mutation on this actor (`createAndCommit`, `updateProcessing`,
+  /// `setFavorite`, `delete`, `updateRecipe`, `replaceProcessedAsset`)
+  /// finishes updating `manifest`/`latestDiagnostics` synchronously before
+  /// returning — none of those writes suspend mid-mutation — so a caller
+  /// that just performed one of those calls already holds the authoritative
+  /// state here. Re-running `reconcileCommittedItems`/`recoverStagedCreations`/
+  /// `recoverInterruptedDeletions` on every capture, favorite toggle, and
+  /// delete would repeat the same disk scan for no new information.
+  ///
+  /// Use `refreshSnapshot()` instead at startup, when a view first appears
+  /// (the Lab's `.task`), and after any error or otherwise uncertain
+  /// outcome: only that path recovers staged/committed changes made outside
+  /// a completed mutation on this actor, such as a previous crash or a file
+  /// changed on disk directly.
+  func currentSnapshot() -> MediaLibrarySnapshot {
+    snapshot()
+  }
+
   func items() throws -> [MediaItem] {
     _ = try prepare()
     return sortedItems(manifest.items)

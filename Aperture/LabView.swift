@@ -22,7 +22,7 @@ struct LabView: View {
       content
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(ApertureStyle.ink.ignoresSafeArea())
-        .navigationTitle("Gallery")
+        .navigationTitle("Lab")
         .navigationBarTitleDisplayMode(.inline)
         .toolbarColorScheme(.dark, for: .navigationBar, .bottomBar)
         .toolbar {
@@ -208,10 +208,8 @@ struct LabView: View {
       isExporting = true
       let items = selectedItems
       Task {
-        if await model.export(items) {
-          localNotice =
-            items.count == 1
-            ? "Saved to Photos." : "Saved \(items.count) media items to Photos."
+        if let outcome = await model.export(items) {
+          localNotice = AppModel.exportNoticeText(for: outcome)
         }
         isExporting = false
       }

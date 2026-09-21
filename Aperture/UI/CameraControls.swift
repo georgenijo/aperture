@@ -119,10 +119,15 @@ struct NoticeBanner: View {
   let text: String
   let dismiss: () -> Void
 
+  @Environment(\.accessibilityVoiceOverEnabled) private var voiceOverEnabled
+
   var body: some View {
     Button(action: dismiss) {
       HStack(spacing: 8) {
-        Image(systemName: "checkmark.circle.fill").foregroundStyle(ApertureStyle.amber)
+        // `notice` carries plain status text (including partial failures
+        // like "Photos could not be updated."), not exclusively successes,
+        // so the icon stays a neutral marker rather than implying success.
+        Image(systemName: "info.circle.fill").foregroundStyle(ApertureStyle.amber)
         Text(text).font(.subheadline.weight(.semibold)).foregroundStyle(ApertureStyle.bone)
         Spacer(minLength: 8)
         Image(systemName: "xmark").font(.caption.weight(.bold)).foregroundStyle(ApertureStyle.muted)
@@ -132,6 +137,19 @@ struct NoticeBanner: View {
       .overlay(Capsule().stroke(.white.opacity(0.12)))
     }
     .buttonStyle(.plain).padding(.horizontal, 20)
+    .accessibilityHint("Double tap to dismiss")
+    // `task(id:)` cancels its sleep whenever `text` changes or the banner
+    // leaves the hierarchy (superseded by a new notice, or dismissed), so a
+    // stray dismiss can never fire for a notice that is already gone.
+    .task(id: text) {
+      guard !voiceOverEnabled else { return }
+      do {
+        try await Task.sleep(nanoseconds: 4_000_000_000)
+        dismiss()
+      } catch {
+        // Cancelled — nothing to do.
+      }
+    }
   }
 }
 
