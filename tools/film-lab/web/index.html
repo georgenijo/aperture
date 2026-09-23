@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <title>Aperture Film Lab</title>
+  <link rel="stylesheet" href="/styles.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <strong>Aperture Film Lab</strong>
+      <span class="tag" id="base-recipe">1998</span>
+    </div>
+    <div class="status" id="status" role="status" aria-live="polite">Connecting…</div>
+  </header>
+
+  <main class="layout">
+    <section class="stage" aria-label="Comparison">
+      <div class="stage-toolbar">
+        <div class="segmented" role="group" aria-label="Comparison mode">
+          <button type="button" data-mode="split" class="active">Before / after</button>
+          <button type="button" data-mode="original">Original</button>
+          <button type="button" data-mode="processed">1998</button>
+        </div>
+        <label class="inline">Preview
+          <select id="preview-size">
+            <option value="960">960 px</option>
+            <option value="1280" selected>1280 px</option>
+            <option value="1920">1920 px</option>
+          </select>
+        </label>
+        <span class="approx" id="approx-label">Approximate preview: grain, softness, halation and fringing scale with resolution. Render full resolution to judge texture.</span>
+      </div>
+
+      <div class="canvas" id="canvas" data-mode="split">
+        <div class="canvas-empty" id="canvas-empty">
+          <p>Drop JPEG, PNG or HEIC photos here, choose files, or add the three sample fixtures.</p>
+        </div>
+        <div class="frame" id="frame" hidden>
+          <img id="img-original" alt="Original" draggable="false">
+          <img id="img-processed" alt="1998 processed preview" draggable="false">
+          <div class="split-handle" id="split-handle" role="slider" tabindex="0" aria-label="Before/after split" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50"></div>
+          <span class="corner left">Original</span>
+          <span class="corner right">1998</span>
+          <span class="busy" id="busy" hidden>Rendering…</span>
+        </div>
+      </div>
+
+      <div class="strip-bar">
+        <label class="button">
+          Add photos
+          <input type="file" id="file-input" accept="image/jpeg,image/png,image/heic,image/heif,.heic,.heif" multiple hidden>
+        </label>
+        <button type="button" id="add-samples">Add sample fixtures</button>
+        <button type="button" id="render-set" class="primary">Render reference set</button>
+        <span class="muted" id="strip-note"></span>
+      </div>
+      <ol class="strip" id="strip" aria-label="Reference photos"></ol>
+
+      <section class="batch" id="batch" hidden aria-label="Reference set render">
+        <header>
+          <h2>Reference set</h2>
+          <span class="muted" id="batch-note"></span>
+          <button type="button" id="batch-close" class="ghost">Close</button>
+        </header>
+        <div class="batch-grid" id="batch-grid"></div>
+      </section>
+    </section>
+
+    <aside class="panel" aria-label="Controls">
+      <section class="card">
+        <h2>Context</h2>
+        <p class="muted small">The seed and instant are explicit so a look reproduces exactly. Sliders never pick a new seed.</p>
+        <div class="field">
+          <label for="ctx-seed">Seed</label>
+          <div class="row">
+            <input id="ctx-seed" inputmode="numeric" autocomplete="off" spellcheck="false">
+            <button type="button" id="new-seed" title="Pick a new random seed">New seed</button>
+          </div>
+        </div>
+        <div class="field">
+          <label for="ctx-captured">Capture instant (ISO 8601)</label>
+          <input id="ctx-captured" autocomplete="off" spellcheck="false">
+        </div>
+        <div class="field">
+          <label for="ctx-zone">Time zone</label>
+          <input id="ctx-zone" list="zones" autocomplete="off" spellcheck="false">
+          <datalist id="zones">
+            <option value="UTC"></option><option value="America/New_York"></option><option value="America/Los_Angeles"></option>
+            <option value="Europe/London"></option><option value="Europe/Paris"></option><option value="Asia/Tokyo"></option>
+            <option value="Asia/Kolkata"></option><option value="Australia/Sydney"></option>
+          </datalist>
+        </div>
+        <div class="field">
+          <label for="ctx-quality">Photo quality (full-res JPEG)</label>
+          <select id="ctx-quality"></select>
+        </div>
+        <dl class="facts">
+          <dt>Stamp</dt><dd id="fact-stamp">—</dd>
+          <dt>Light leak</dt><dd id="fact-leak">—</dd>
+          <dt>Recipe</dt><dd id="fact-fingerprint" class="mono">—</dd>
+        </dl>
+      </section>
+
+      <div id="control-groups"></div>
+
+      <section class="card">
+        <div class="row">
+          <button type="button" id="reset-all">Reset all to 1998</button>
+          <span class="muted small" id="changed-count"></span>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Full resolution</h2>
+        <p class="muted small">Renders the selected photo at its native size with the settings frozen at request time. JPEGs carry no camera EXIF, GPS or other source metadata.</p>
+        <button type="button" id="render-full" class="primary">Render full resolution</button>
+        <div id="full-result" class="full-result" hidden>
+          <p id="full-meta" class="small"></p>
+          <div class="row">
+            <button type="button" id="full-inspect">Inspect 1:1</button>
+            <button type="button" id="full-download">Download JPEG</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Looks</h2>
+        <p class="muted small">Saved locally as recipe-candidate JSON. Saving or exporting never installs a look into Aperture.</p>
+        <div class="field">
+          <label for="look-name">Name</label>
+          <div class="row">
+            <input id="look-name" maxlength="80" autocomplete="off" placeholder="e.g. Warmer 1998">
+            <button type="button" id="save-look">Save</button>
+          </div>
+        </div>
+        <ul class="looks" id="looks"></ul>
+        <div class="row">
+          <label class="button">Import JSON…<input type="file" id="import-input" accept="application/json,.json" hidden></label>
+          <button type="button" id="export-look">Export JSON</button>
+        </div>
+        <p class="muted small" id="looks-dir"></p>
+      </section>
+
+      <section class="card">
+        <details id="recipe-details">
+          <summary>Resolved applied recipe</summary>
+          <p class="muted small">The exact recipe this preview renders, as it would be persisted. Shown as text; it is never parsed by the browser.</p>
+          <pre id="recipe-text" class="recipe"></pre>
+        </details>
+      </section>
+    </aside>
+  </main>
+
+  <div class="toast" id="toast" role="alert" hidden></div>
+  <div class="dropveil" id="dropveil" hidden><p>Drop photos to add them to the reference set</p></div>
+  <div class="viewer" id="viewer" hidden>
+    <div class="viewer-bar">
+      <span id="viewer-title"></span>
+      <button type="button" id="viewer-close">Close</button>
+    </div>
+    <div class="viewer-body"><img id="viewer-img" alt="Full-resolution render"></div>
+  </div>
+</body>
+</html>
