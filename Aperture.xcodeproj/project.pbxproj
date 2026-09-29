@@ -89,10 +89,13 @@
 		D8313E6AE3DC437080A6A2AB /* golden-hdr-still-life-aperture-cinema.png in Resources */ = {isa = PBXBuildFile; fileRef = B01CE757550741A39C739D88 /* golden-hdr-still-life-aperture-cinema.png */; };
 		C10000010000000000000001 /* ApertureUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10000020000000000000001 /* ApertureUITests.swift */; };
 		4964F3E145394F6EADA6870B /* golden-day-portrait-aperture-digicam.png in Resources */ = {isa = PBXBuildFile; fileRef = 2A22E139905D42F2A4600667 /* golden-day-portrait-aperture-digicam.png */; };
+		1C3D1AF4712E4151ADC1DF5D /* golden-day-portrait-aperture-digicam-v6.png in Resources */ = {isa = PBXBuildFile; fileRef = BC67ADEF08B048208E442FD3 /* golden-day-portrait-aperture-digicam-v6.png */; };
 		D21558C68B1B44F9B2597A21 /* golden-day-portrait-aperture-digicam-v5.png in Resources */ = {isa = PBXBuildFile; fileRef = AB5256A060DB46D2BF370FBC /* golden-day-portrait-aperture-digicam-v5.png */; };
 		24E64D15878E4294AB504E8B /* golden-night-flash-aperture-digicam.png in Resources */ = {isa = PBXBuildFile; fileRef = 896AF7D537E44B9FAE95D080 /* golden-night-flash-aperture-digicam.png */; };
+		4F3C1D5191C14F86821AA0D6 /* golden-night-flash-aperture-digicam-v6.png in Resources */ = {isa = PBXBuildFile; fileRef = 1D68280C1FE7473182377E12 /* golden-night-flash-aperture-digicam-v6.png */; };
 		816DD96F632A4E609EB5271E /* golden-night-flash-aperture-digicam-v5.png in Resources */ = {isa = PBXBuildFile; fileRef = FF22B7C633C44DB08AAF7F9B /* golden-night-flash-aperture-digicam-v5.png */; };
 		8A8412B7B2C44635A336DD3A /* golden-hdr-still-life-aperture-digicam.png in Resources */ = {isa = PBXBuildFile; fileRef = FB67470DD21E41D2BDBD21F0 /* golden-hdr-still-life-aperture-digicam.png */; };
+		A40F2D283B5E400E804E9CF4 /* golden-hdr-still-life-aperture-digicam-v6.png in Resources */ = {isa = PBXBuildFile; fileRef = 89A5F48679B3498B852B15A7 /* golden-hdr-still-life-aperture-digicam-v6.png */; };
 		F39DAEA10A19434795C575BD /* golden-hdr-still-life-aperture-digicam-v5.png in Resources */ = {isa = PBXBuildFile; fileRef = F2C98AE0118944769E5A4D2B /* golden-hdr-still-life-aperture-digicam-v5.png */; };
 /* End PBXBuildFile section */
 
@@ -183,10 +186,13 @@
 		C10000020000000000000001 /* ApertureUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApertureUITests.swift; sourceTree = "<group>"; };
 		C10000020000000000000002 /* ApertureUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ApertureUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		2A22E139905D42F2A4600667 /* golden-day-portrait-aperture-digicam.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "golden-day-portrait-aperture-digicam.png"; sourceTree = "<group>"; };
+		BC67ADEF08B048208E442FD3 /* golden-day-portrait-aperture-digicam-v6.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "golden-day-portrait-aperture-digicam-v6.png"; sourceTree = "<group>"; };
 		AB5256A060DB46D2BF370FBC /* golden-day-portrait-aperture-digicam-v5.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "golden-day-portrait-aperture-digicam-v5.png"; sourceTree = "<group>"; };
 		896AF7D537E44B9FAE95D080 /* golden-night-flash-aperture-digicam.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "golden-night-flash-aperture-digicam.png"; sourceTree = "<group>"; };
+		1D68280C1FE7473182377E12 /* golden-night-flash-aperture-digicam-v6.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "golden-night-flash-aperture-digicam-v6.png"; sourceTree = "<group>"; };
 		FF22B7C633C44DB08AAF7F9B /* golden-night-flash-aperture-digicam-v5.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "golden-night-flash-aperture-digicam-v5.png"; sourceTree = "<group>"; };
 		FB67470DD21E41D2BDBD21F0 /* golden-hdr-still-life-aperture-digicam.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "golden-hdr-still-life-aperture-digicam.png"; sourceTree = "<group>"; };
+		89A5F48679B3498B852B15A7 /* golden-hdr-still-life-aperture-digicam-v6.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "golden-hdr-still-life-aperture-digicam-v6.png"; sourceTree = "<group>"; };
 		F2C98AE0118944769E5A4D2B /* golden-hdr-still-life-aperture-digicam-v5.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "golden-hdr-still-life-aperture-digicam-v5.png"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -324,10 +330,13 @@
 				B2947AE4AC054E3C8D388312 /* golden-day-portrait-aperture-1998.png */,
 				F549C9665CA640AEAB94A911 /* golden-day-portrait-aperture-1998-v4.png */,
 				2A22E139905D42F2A4600667 /* golden-day-portrait-aperture-digicam.png */,
+				BC67ADEF08B048208E442FD3 /* golden-day-portrait-aperture-digicam-v6.png */,
 				AB5256A060DB46D2BF370FBC /* golden-day-portrait-aperture-digicam-v5.png */,
 				896AF7D537E44B9FAE95D080 /* golden-night-flash-aperture-digicam.png */,
+				1D68280C1FE7473182377E12 /* golden-night-flash-aperture-digicam-v6.png */,
 				FF22B7C633C44DB08AAF7F9B /* golden-night-flash-aperture-digicam-v5.png */,
 				FB67470DD21E41D2BDBD21F0 /* golden-hdr-still-life-aperture-digicam.png */,
+				89A5F48679B3498B852B15A7 /* golden-hdr-still-life-aperture-digicam-v6.png */,
 				F2C98AE0118944769E5A4D2B /* golden-hdr-still-life-aperture-digicam-v5.png */,
 				6DD6EDF18863463CBD7099DB /* golden-day-portrait-aperture-night.png */,
 				0CB36B39199B4FB6837AEC90 /* golden-day-portrait-aperture-cinema.png */,
@@ -502,10 +511,13 @@
 				6047D15119A64069BC519955 /* golden-day-portrait-aperture-1998.png in Resources */,
 				70F99E387042497383DA446A /* golden-day-portrait-aperture-1998-v4.png in Resources */,
 				4964F3E145394F6EADA6870B /* golden-day-portrait-aperture-digicam.png in Resources */,
+				1C3D1AF4712E4151ADC1DF5D /* golden-day-portrait-aperture-digicam-v6.png in Resources */,
 				D21558C68B1B44F9B2597A21 /* golden-day-portrait-aperture-digicam-v5.png in Resources */,
 				24E64D15878E4294AB504E8B /* golden-night-flash-aperture-digicam.png in Resources */,
+				4F3C1D5191C14F86821AA0D6 /* golden-night-flash-aperture-digicam-v6.png in Resources */,
 				816DD96F632A4E609EB5271E /* golden-night-flash-aperture-digicam-v5.png in Resources */,
 				8A8412B7B2C44635A336DD3A /* golden-hdr-still-life-aperture-digicam.png in Resources */,
+				A40F2D283B5E400E804E9CF4 /* golden-hdr-still-life-aperture-digicam-v6.png in Resources */,
 				F39DAEA10A19434795C575BD /* golden-hdr-still-life-aperture-digicam-v5.png in Resources */,
 				9EA5A0E76941416E866BEC1A /* golden-day-portrait-aperture-night.png in Resources */,
 				F997DB7D00DB4DD8A4F9D8EB /* golden-day-portrait-aperture-cinema.png in Resources */,

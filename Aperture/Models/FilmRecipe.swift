@@ -150,8 +150,8 @@ struct FilmParameters: Codable, Hashable, Sendable {
 enum FilmRecipeVersion {
   // Existing film catalog recipes stay on v5; Digicam advances independently.
   static let current = 5
-  static let digicam = 6
-  static let supported = 1...6
+  static let digicam = 7
+  static let supported = 1...7
   /// The first version whose manifests persist `stages` instead of the flat
   /// v1 `parameters`.
   static let stageSchema = 2
@@ -407,7 +407,8 @@ enum FilmRecipeCatalog {
 
   // Compact-digital response: steeper contrast separates direct flash from
   // the background, with coarse noise weighted toward shadows. Shared
-  // channel curves retain believable whites and blue hues.
+  // channel curves retain believable whites and blue hues. Gentler upper
+  // knots and restrained warm chroma keep flash-lit skin from turning orange.
   // No film bloom, blur, colour fringe or light-leak stage is injected.
   static let digicam = FilmRecipe(
     id: .digicam,
@@ -418,11 +419,11 @@ enum FilmRecipeCatalog {
         FilmResponseStage(
           matrix: [1, 0, 0, 0, 1, 0, 0, 0, 1],
           curves: Array(
-            repeating: [0, 0.065, 0.165, 0.325, 0.535, 0.755, 0.910, 0.980, 1], count: 3),
-          saturation: [1.04, 1.16, 1.04],
-          hueChroma: Array(repeating: 0, count: 8),
+            repeating: [0, 0.065, 0.165, 0.325, 0.535, 0.755, 0.885, 0.955, 1], count: 3),
+          saturation: [1.04, 1.16, 0.84],
+          hueChroma: [0, -0.06, 0, 0, 0, 0, 0, 0],
           hueRotate: Array(repeating: 0, count: 8),
-          hueLight: Array(repeating: 0, count: 8))),
+          hueLight: [0, -0.02, 0, 0, 0, 0, 0, 0])),
       .grain(GrainStage(amount: 0.26, size: 2.4, curveConstant: 1, curveLinear: -0.85, curveQuadratic: 0)),
       .vignette(VignetteStage(amount: 0.22)),
       .dateStamp(DateStampStage(style: .monospaced)),

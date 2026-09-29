@@ -31,6 +31,26 @@ final class GoldenRenderTests: XCTestCase {
     var fileSuffix = ""
   }
 
+  private static let digicamV6 = FilmRecipe(
+    id: .digicam,
+    version: 6,
+    displayName: "Digicam",
+    stages: [
+      .filmResponse(
+        FilmResponseStage(
+          matrix: [1, 0, 0, 0, 1, 0, 0, 0, 1],
+          curves: Array(
+            repeating: [0, 0.065, 0.165, 0.325, 0.535, 0.755, 0.910, 0.980, 1], count: 3),
+          saturation: [1.04, 1.16, 1.04],
+          hueChroma: Array(repeating: 0, count: 8),
+          hueRotate: Array(repeating: 0, count: 8),
+          hueLight: Array(repeating: 0, count: 8))),
+      .grain(GrainStage(amount: 0.26, size: 2.4, curveConstant: 1, curveLinear: -0.85, curveQuadratic: 0)),
+      .vignette(VignetteStage(amount: 0.22)),
+      .dateStamp(DateStampStage(style: .monospaced)),
+    ]
+  )
+
   private static let digicamV5 = FilmRecipe(
     id: .digicam,
     version: 5,
@@ -109,7 +129,7 @@ final class GoldenRenderTests: XCTestCase {
 
     var cases: [GoldenCase] = []
     let films = FilmRecipeCatalog.all.enumerated().map { ($0.offset, $0.element, "") }
-      + [(0, Self.nineteenNinetyEightV4, "-v4"), (3, Self.digicamV5, "-v5")]
+      + [(0, Self.nineteenNinetyEightV4, "-v4"), (3, Self.digicamV5, "-v5"), (3, Self.digicamV6, "-v6")]
     for (filmIndex, film, fileSuffix) in films {
       for (fixtureIndex, fixtureName) in fixtureNames.enumerated() {
         let base = UInt64(1_000 + filmIndex * 100 + fixtureIndex * 10)

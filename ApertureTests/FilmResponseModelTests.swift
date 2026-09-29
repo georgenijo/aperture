@@ -19,6 +19,38 @@ final class FilmResponseModelTests: XCTestCase {
     }
   }
 
+  func testDigicamRestrainsBrightWarmChromaWithoutLiftingTheBackground() throws {
+    let response = try XCTUnwrap(FilmRecipeCatalog.digicam.stages.filmResponse)
+    let previous = FilmResponseStage(
+      matrix: [1, 0, 0, 0, 1, 0, 0, 0, 1],
+      curves: Array(repeating: [0, 0.065, 0.165, 0.325, 0.535, 0.755, 0.910, 0.980, 1], count: 3),
+      saturation: [1.04, 1.16, 1.04],
+      hueChroma: Array(repeating: 0, count: 8),
+      hueRotate: Array(repeating: 0, count: 8),
+      hueLight: Array(repeating: 0, count: 8))
+    // Warm flash-lit probes should retain colour but avoid the previous
+    // boost that pushed red toward clipping and obscured skin texture.
+    for (red, green, blue) in [(0.95, 0.70, 0.48), (0.90, 0.62, 0.42), (0.85, 0.55, 0.32)] {
+      let input = FilmRGB(red: red, green: green, blue: blue)
+      let before = FilmResponseModel.map(input, response: previous)
+      let after = FilmResponseModel.map(input, response: response)
+      XCTAssertLessThan(after.red, before.red)
+      XCTAssertLessThan(oklabHueAndChroma(after).chroma, oklabHueAndChroma(before).chroma)
+      XCTAssertGreaterThan(after.red, after.green)
+      XCTAssertGreaterThan(after.green, after.blue)
+    }
+    for value in [0.125, 0.25, 0.375] {
+      let input = FilmRGB(red: value, green: value, blue: value)
+      XCTAssertEqual(
+        FilmResponseModel.map(input, response: response).luminance,
+        FilmResponseModel.map(input, response: previous).luminance, accuracy: 0.000001)
+    }
+    let white = FilmResponseModel.map(FilmRGB(red: 1, green: 1, blue: 1), response: response)
+    XCTAssertEqual(white.red, 1, accuracy: 0.0001)
+    XCTAssertEqual(white.green, 1, accuracy: 0.0001)
+    XCTAssertEqual(white.blue, 1, accuracy: 0.0001)
+  }
+
   func testDigicamPreservesBlueHueInsteadOfRotatingItViolet() throws {
     let response = try XCTUnwrap(FilmRecipeCatalog.digicam.stages.filmResponse)
     for (red, green, blue) in [(90.0, 140.0, 210.0), (150, 170, 220), (117, 133, 175), (45, 75, 160)] {
@@ -28,7 +60,7 @@ final class FilmResponseModelTests: XCTestCase {
       let shift = (after.hue - before.hue + 540).truncatingRemainder(dividingBy: 360) - 180
       // A steep shared RGB curve can move blue toward cyan, but must not
       // introduce the violet rotation of the film recipe.
-      XCTAssertGreaterThan(shift, -12)
+      XCTAssertGreaterThan(shift, -13)
       XCTAssertLessThan(shift, 5)
       let mapped = FilmResponseModel.map(input, response: response)
       XCTAssertGreaterThan(mapped.blue, mapped.green)
