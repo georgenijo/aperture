@@ -6,6 +6,7 @@ struct FilmRecipeIdentifier: RawRepresentable, Codable, Hashable, Sendable {
   static let nineteenNinetyEight = FilmRecipeIdentifier(rawValue: "aperture.1998")
   static let night = FilmRecipeIdentifier(rawValue: "aperture.night")
   static let cinema = FilmRecipeIdentifier(rawValue: "aperture.cinema")
+  static let digicam = FilmRecipeIdentifier(rawValue: "aperture.digicam")
   static let legacyOriginal = FilmRecipeIdentifier(rawValue: "aperture.legacy-original")
 }
 
@@ -400,7 +401,31 @@ extension AppliedFilmRecipe: Codable {
 }
 
 enum FilmRecipeCatalog {
-  static let all: [FilmRecipe] = [nineteenNinetyEight, night, cinema]
+  static let all: [FilmRecipe] = [nineteenNinetyEight, night, cinema, digicam]
+
+  // Compact-digital look: neutral colour and a mild shared contrast curve
+  // preserve the capture's white balance, blue hues and direct-flash lighting.
+  // Sensor noise is retained; only a small amount of seeded grain is added.
+  // No film bloom, blur, colour fringe or light-leak stage is injected.
+  static let digicam = FilmRecipe(
+    id: .digicam,
+    version: FilmRecipeVersion.current,
+    displayName: "Digicam",
+    stages: [
+      .filmResponse(
+        FilmResponseStage(
+          matrix: [1, 0, 0, 0, 1, 0, 0, 0, 1],
+          curves: Array(
+            repeating: [0, 0.105, 0.230, 0.370, 0.515, 0.655, 0.785, 0.905, 1], count: 3),
+          saturation: [1.00, 1.08, 1.02],
+          hueChroma: Array(repeating: 0, count: 8),
+          hueRotate: Array(repeating: 0, count: 8),
+          hueLight: Array(repeating: 0, count: 8))),
+      .grain(GrainStage(amount: 0.045, size: 1)),
+      .vignette(VignetteStage(amount: 0.10)),
+      .dateStamp(DateStampStage(style: .monospaced)),
+    ]
+  )
 
   // The 1998 look is a film response retargeted to measured Huji output
   // (recipe version 5). `tools/film-response-fit/` first fitted a crosstalk

@@ -213,6 +213,27 @@ final class VideoProcessorTests: XCTestCase {
       abs(centre.red - sourceCentre.red) + abs(centre.blue - sourceCentre.blue), 12 / 255)
   }
 
+  func testDigicamVideoUsesItsNeutralBlueResponse() async throws {
+    let sourceURL = try makeTinyVideo(solid: FilmRGB(red: 150 / 255, green: 170 / 255, blue: 220 / 255))
+    let destinationURL = FileManager.default.temporaryDirectory
+      .appendingPathComponent("aperture-video-digicam-\(UUID().uuidString).mov")
+    defer {
+      try? FileManager.default.removeItem(at: sourceURL)
+      try? FileManager.default.removeItem(at: destinationURL)
+    }
+    let recipe = FilmRecipeCatalog.digicam.resolve(
+      seed: 7, capturedAt: Date(timeIntervalSince1970: 1_700_000_000),
+      options: FilmProcessingOptions(lightLeaksEnabled: true, dateStamp: .off), timeZone: .gmt)
+    let outputURL = try await VideoProcessor().process(
+      sourceURL: sourceURL, recipe: recipe, destinationURL: destinationURL)
+    let sourceCentre = try await centrePixel(ofVideoAt: sourceURL)
+    let centre = try await centrePixel(ofVideoAt: outputURL)
+    let expected = FilmResponseModel.map(sourceCentre, response: try XCTUnwrap(recipe.filmResponse))
+    XCTAssertEqual(centre.red, expected.red, accuracy: 8 / 255)
+    XCTAssertEqual(centre.green, expected.green, accuracy: 8 / 255)
+    XCTAssertEqual(centre.blue, expected.blue, accuracy: 8 / 255)
+  }
+
   func testVideoHalationUsesTheHighlightGlowWhenTheStageIsThresholded() {
     // The v5 stage carries a larger amount meant for the thresholded glow.
     // Video must honour the threshold rather than feed that amount to its

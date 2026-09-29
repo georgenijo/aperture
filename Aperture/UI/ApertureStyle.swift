@@ -21,6 +21,7 @@ enum ApertureStyle {
 
   static func accent(for id: FilmRecipeIdentifier) -> Color {
     switch id {
+    case .digicam: return Color(red: 0.50, green: 0.74, blue: 0.82)
     case .night: return Color(red: 0.40, green: 0.52, blue: 0.65)
     case .cinema: return Color(red: 0.70, green: 0.62, blue: 0.48)
     default: return amber

@@ -14,6 +14,30 @@ import XCTest
 /// that the executor really is driven by the array (not a fixed order), and
 /// a coarse statistical characterization of every catalog recipe.
 final class FilmStageTests: XCTestCase {
+  func testDigicamDoesNotAddFilmOpticsOrLeaksAndHonoursStampSettings() throws {
+    let film = try XCTUnwrap(FilmRecipeCatalog.recipe(for: .digicam))
+    XCTAssertNil(film.stages.softness)
+    XCTAssertNil(film.stages.chromaticAberration)
+    XCTAssertNil(film.stages.halation)
+    XCTAssertNil(film.stages.lightLeak)
+    for seed in UInt64(0)..<32 {
+      let recipe = film.resolve(
+        seed: seed, capturedAt: Date(timeIntervalSince1970: 1_700_000_000),
+        options: FilmProcessingOptions(lightLeaksEnabled: true, dateStamp: .off), timeZone: .gmt)
+      XCTAssertFalse(recipe.resolvedSettings.lightLeakApplied)
+      XCTAssertNil(FilmProcessingDecision.make(for: recipe).leak)
+      XCTAssertNil(recipe.resolvedSettings.dateStampText)
+      XCTAssertLessThan(try XCTUnwrap(recipe.grain).amount, 0.081)
+    }
+    let stamped = film.resolve(
+      seed: 1, capturedAt: Date(timeIntervalSince1970: 1_700_000_000),
+      options: FilmProcessingOptions(
+        lightLeaksEnabled: true,
+        dateStamp: DateStampConfiguration(mode: .current, format: .yearMonthDay, localeIdentifier: "en_US_POSIX")),
+      timeZone: .gmt)
+    XCTAssertNotNil(stamped.resolvedSettings.dateStampText)
+  }
+
 
   // MARK: 1. v1 manifest decode equivalence + leak width by identifier
 
@@ -345,6 +369,15 @@ final class FilmStageTests: XCTestCase {
   /// byte-exact golden isn't in play. Regenerate the table by running with
   /// `APERTURE_DUMP_REFERENCE_STATS=1` and pasting the printed rows.
   private let referenceStatistics: [ReferenceKey: ReferenceStatistics] = [
+    ReferenceKey(recipe: .digicam, fixture: "day-portrait"): ReferenceStatistics(
+      mean: 0.5312, standardDeviation: 0.3153, redMean: 0.5667, saturation: 0.3560,
+      blackClip: 0.0038),
+    ReferenceKey(recipe: .digicam, fixture: "night-flash"): ReferenceStatistics(
+      mean: 0.2359, standardDeviation: 0.2770, redMean: 0.2962, saturation: 0.3947,
+      blackClip: 0.1263),
+    ReferenceKey(recipe: .digicam, fixture: "hdr-still-life"): ReferenceStatistics(
+      mean: 0.4232, standardDeviation: 0.3448, redMean: 0.5065, saturation: 0.5942,
+      blackClip: 0.0420),
     ReferenceKey(recipe: .nineteenNinetyEight, fixture: "day-portrait"): ReferenceStatistics(
       mean: 0.4735, standardDeviation: 0.3270, redMean: 0.5509, saturation: 0.4597,
       blackClip: 0.0308),
@@ -407,7 +440,7 @@ final class FilmStageTests: XCTestCase {
                 + "      blackClip: %.4f),",
               [
                 FilmRecipeIdentifier.nineteenNinetyEight: "nineteenNinetyEight",
-                .night: "night", .cinema: "cinema", .legacyOriginal: "legacyOriginal",
+                .night: "night", .cinema: "cinema", .digicam: "digicam", .legacyOriginal: "legacyOriginal",
               ][recipe.id] ?? recipe.id.rawValue, fixture,
               stats.mean, stats.standardDeviation, stats.redMean, stats.saturation,
               stats.blackClip))

@@ -96,9 +96,9 @@ final class GoldenRenderTests: XCTestCase {
         let seed = findLightLeakSeed(for: film, base: base)
         let applied = film.resolve(
           seed: seed, capturedAt: captureDate, options: options, timeZone: .gmt)
-        XCTAssertTrue(
-          applied.resolvedSettings.lightLeakApplied,
-          "\(film.displayName)/\(fixtureName) must cover a light-leak render")
+        XCTAssertEqual(
+          applied.resolvedSettings.lightLeakApplied, (film.stages.lightLeak?.probability ?? 0) > 0,
+          "\(film.displayName)/\(fixtureName) must cover its configured leak behaviour")
         cases.append(
           GoldenCase(fixtureName: fixtureName, recipe: film, seed: seed, fileSuffix: fileSuffix))
       }
@@ -143,6 +143,7 @@ final class GoldenRenderTests: XCTestCase {
   /// Searches seeds upward from `base` until the resolved recipe reports a
   /// light-leak render, so the golden set provably exercises that stage.
   private func findLightLeakSeed(for film: FilmRecipe, base: UInt64) -> UInt64 {
+    guard (film.stages.lightLeak?.probability ?? 0) > 0 else { return base }
     var seed = base
     for _ in 0..<5_000 {
       let applied = film.resolve(

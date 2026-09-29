@@ -75,12 +75,20 @@ final class ApertureUITests: XCTestCase {
     attachScreen("Camera chrome — largest accessibility text", app: app)
     app.buttons["camera-film"].tap()
     XCTAssertTrue(app.navigationBars["Film"].waitForExistence(timeout: 5))
-    let cinema = app.buttons["Cinema"]
-    for _ in 0..<4 where !cinema.isHittable { app.swipeUp() }
-    XCTAssertTrue(cinema.isHittable, "Every film must remain selectable")
-    cinema.tap()
+    let digicam = app.buttons["Digicam"]
+    for _ in 0..<4 where !digicam.isHittable { app.swipeUp() }
+    XCTAssertTrue(digicam.isHittable, "The fourth film must remain selectable")
+    attachScreen("Digicam picker — largest accessibility text", app: app)
+    digicam.tap()
     XCTAssertTrue(app.buttons["camera-film"].waitForExistence(timeout: 5))
-    XCTAssertEqual(app.buttons["camera-film"].value as? String, "Cinema")
+    XCTAssertEqual(app.buttons["camera-film"].value as? String, "Digicam")
+    app.buttons["camera-settings"].tap()
+    XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 5))
+    XCTAssertFalse(app.switches["Light Leaks"].exists, "Digicam must not expose an ineffective leak toggle")
+    let stamp = app.buttons["settings-date-stamp"]
+    for _ in 0..<6 where !stamp.isHittable { app.swipeUp() }
+    XCTAssertTrue(stamp.isHittable, "Digicam must keep date stamps optional and reachable")
+    app.buttons["Done"].tap()
     // Restore the default so other tests don't depend on execution order.
     app.buttons["camera-film"].tap()
     app.buttons["1998"].tap()

@@ -4,6 +4,32 @@ import XCTest
 @testable import Aperture
 
 final class FilmResponseModelTests: XCTestCase {
+  func testDigicamKeepsGreysNeutralAndMoreShadowDetailThan1998() throws {
+    let response = try XCTUnwrap(FilmRecipeCatalog.digicam.stages.filmResponse)
+    let filmResponse = try XCTUnwrap(FilmRecipeCatalog.nineteenNinetyEight.stages.filmResponse)
+    for step in 0...64 {
+      let value = Double(step) / 64
+      let input = FilmRGB(red: value, green: value, blue: value)
+      let mapped = FilmResponseModel.map(input, response: response)
+      XCTAssertEqual(mapped.red, mapped.green, accuracy: 0.0001)
+      XCTAssertEqual(mapped.blue, mapped.green, accuracy: 0.0001)
+      if value > 0 && value <= 0.25 {
+        XCTAssertGreaterThan(mapped.luminance, FilmResponseModel.map(input, response: filmResponse).luminance)
+      }
+    }
+  }
+
+  func testDigicamPreservesBlueHueInsteadOfRotatingItViolet() throws {
+    let response = try XCTUnwrap(FilmRecipeCatalog.digicam.stages.filmResponse)
+    for (red, green, blue) in [(90.0, 140.0, 210.0), (150, 170, 220), (117, 133, 175), (45, 75, 160)] {
+      let input = FilmRGB(red: red / 255, green: green / 255, blue: blue / 255)
+      let before = oklabHueAndChroma(input)
+      let after = oklabHueAndChroma(FilmResponseModel.map(input, response: response))
+      let shift = (after.hue - before.hue + 540).truncatingRemainder(dividingBy: 360) - 180
+      XCTAssertLessThan(abs(shift), 5, "Digicam blue hue shifted by \(shift)°")
+    }
+  }
+
   private let huji = FilmRecipeCatalog.nineteenNinetyEight.stages.filmResponse
 
   func testIdentityResponseIsIdentity() {
