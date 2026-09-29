@@ -110,7 +110,7 @@ struct FilmPickerView: View {
   private func description(for id: FilmRecipeIdentifier) -> String {
     switch id {
     case .digicam:
-      "Clean color, crisp detail, and subtle grain."
+      "Punchy flash contrast and coarse shadow texture."
     case .night:
       "Deep blacks, cool shadows, and warm halation."
     case .cinema:

@@ -148,8 +148,10 @@ struct FilmParameters: Codable, Hashable, Sendable {
 /// knob set applied in a hard-coded order; v2 recipes carry that same order
 /// (and, for future recipes, other orders) explicitly as `stages`.
 enum FilmRecipeVersion {
+  // Existing film catalog recipes stay on v5; Digicam advances independently.
   static let current = 5
-  static let supported = 1...5
+  static let digicam = 6
+  static let supported = 1...6
   /// The first version whose manifests persist `stages` instead of the flat
   /// v1 `parameters`.
   static let stageSchema = 2
@@ -403,26 +405,26 @@ extension AppliedFilmRecipe: Codable {
 enum FilmRecipeCatalog {
   static let all: [FilmRecipe] = [nineteenNinetyEight, night, cinema, digicam]
 
-  // Compact-digital look: neutral colour and a mild shared contrast curve
-  // preserve the capture's white balance, blue hues and direct-flash lighting.
-  // Sensor noise is retained; only a small amount of seeded grain is added.
+  // Compact-digital response: steeper contrast separates direct flash from
+  // the background, with coarse noise weighted toward shadows. Shared
+  // channel curves retain believable whites and blue hues.
   // No film bloom, blur, colour fringe or light-leak stage is injected.
   static let digicam = FilmRecipe(
     id: .digicam,
-    version: FilmRecipeVersion.current,
+    version: FilmRecipeVersion.digicam,
     displayName: "Digicam",
     stages: [
       .filmResponse(
         FilmResponseStage(
           matrix: [1, 0, 0, 0, 1, 0, 0, 0, 1],
           curves: Array(
-            repeating: [0, 0.105, 0.230, 0.370, 0.515, 0.655, 0.785, 0.905, 1], count: 3),
-          saturation: [1.00, 1.08, 1.02],
+            repeating: [0, 0.065, 0.165, 0.325, 0.535, 0.755, 0.910, 0.980, 1], count: 3),
+          saturation: [1.04, 1.16, 1.04],
           hueChroma: Array(repeating: 0, count: 8),
           hueRotate: Array(repeating: 0, count: 8),
           hueLight: Array(repeating: 0, count: 8))),
-      .grain(GrainStage(amount: 0.045, size: 1)),
-      .vignette(VignetteStage(amount: 0.10)),
+      .grain(GrainStage(amount: 0.26, size: 2.4, curveConstant: 1, curveLinear: -0.85, curveQuadratic: 0)),
+      .vignette(VignetteStage(amount: 0.22)),
       .dateStamp(DateStampStage(style: .monospaced)),
     ]
   )

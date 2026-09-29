@@ -290,7 +290,7 @@ final class VideoProcessorTests: XCTestCase {
       XCTAssertEqual(error, .sourceMissing)
     }
 
-    let unsupportedVersion = FilmRecipeVersion.current + 1
+    let unsupportedVersion = FilmRecipeVersion.supported.upperBound + 1
     let unsupported = AppliedFilmRecipe(
       identifier: valid.identifier,
       version: unsupportedVersion,

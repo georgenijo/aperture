@@ -8,7 +8,7 @@ A native iOS still camera with a small, deliberate film vocabulary: responsive c
 
 - SwiftUI shell with AVFoundation capture/movie recording and UIKit camera preview.
 - Rear/front camera switching, tap focus/exposure, flash modes, ramped zoom, and device-dependent lens stops.
-- Four built-in recipes: 1998, Night, Cinema, and Digicam. Digicam keeps colour neutral and detail crisp, with subtle grain and vignette; the film recipes add halation, chromatic aberration, optional light leaks, and date stamps.
+- Four built-in recipes: 1998, Night, Cinema, and Digicam. Digicam v6 keeps colour neutral, with punchy flash contrast, coarse shadow texture, and a restrained vignette; the film recipes add halation, chromatic aberration, optional light leaks, and date stamps.
 - Photo Quality is captured into each applied recipe as a JPEG compression quality, so re-development remains reproducible after Settings change.
 - Capture bytes are committed locally before development. Development is deferred off the camera/session path and can be retried.
 - Photo mode and short-film mode (with synchronized microphone audio), capped at 60 seconds per clip. Developed films play in detail view and can be shared/exported to Photos.

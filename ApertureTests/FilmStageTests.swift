@@ -27,7 +27,9 @@ final class FilmStageTests: XCTestCase {
       XCTAssertFalse(recipe.resolvedSettings.lightLeakApplied)
       XCTAssertNil(FilmProcessingDecision.make(for: recipe).leak)
       XCTAssertNil(recipe.resolvedSettings.dateStampText)
-      XCTAssertLessThan(try XCTUnwrap(recipe.grain).amount, 0.081)
+      XCTAssertGreaterThan(try XCTUnwrap(recipe.grain).amount, 0.22)
+      XCTAssertLessThan(try XCTUnwrap(recipe.grain).amount, 0.30)
+      XCTAssertEqual(recipe.version, 6)
     }
     let stamped = film.resolve(
       seed: 1, capturedAt: Date(timeIntervalSince1970: 1_700_000_000),
@@ -370,14 +372,14 @@ final class FilmStageTests: XCTestCase {
   /// `APERTURE_DUMP_REFERENCE_STATS=1` and pasting the printed rows.
   private let referenceStatistics: [ReferenceKey: ReferenceStatistics] = [
     ReferenceKey(recipe: .digicam, fixture: "day-portrait"): ReferenceStatistics(
-      mean: 0.5312, standardDeviation: 0.3153, redMean: 0.5667, saturation: 0.3560,
-      blackClip: 0.0038),
+      mean: 0.4481, standardDeviation: 0.3760, redMean: 0.4903, saturation: 0.4448,
+      blackClip: 0.1475),
     ReferenceKey(recipe: .digicam, fixture: "night-flash"): ReferenceStatistics(
-      mean: 0.2359, standardDeviation: 0.2770, redMean: 0.2962, saturation: 0.3947,
-      blackClip: 0.1263),
+      mean: 0.1713, standardDeviation: 0.2900, redMean: 0.2333, saturation: 0.2335,
+      blackClip: 0.5601),
     ReferenceKey(recipe: .digicam, fixture: "hdr-still-life"): ReferenceStatistics(
-      mean: 0.4232, standardDeviation: 0.3448, redMean: 0.5065, saturation: 0.5942,
-      blackClip: 0.0420),
+      mean: 0.3637, standardDeviation: 0.3752, redMean: 0.4408, saturation: 0.4599,
+      blackClip: 0.2535),
     ReferenceKey(recipe: .nineteenNinetyEight, fixture: "day-portrait"): ReferenceStatistics(
       mean: 0.4735, standardDeviation: 0.3270, redMean: 0.5509, saturation: 0.4597,
       blackClip: 0.0308),

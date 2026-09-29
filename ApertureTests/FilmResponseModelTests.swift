@@ -4,9 +4,8 @@ import XCTest
 @testable import Aperture
 
 final class FilmResponseModelTests: XCTestCase {
-  func testDigicamKeepsGreysNeutralAndMoreShadowDetailThan1998() throws {
+  func testDigicamKeepsGreysNeutralWithStrongerFlashContrast() throws {
     let response = try XCTUnwrap(FilmRecipeCatalog.digicam.stages.filmResponse)
-    let filmResponse = try XCTUnwrap(FilmRecipeCatalog.nineteenNinetyEight.stages.filmResponse)
     for step in 0...64 {
       let value = Double(step) / 64
       let input = FilmRGB(red: value, green: value, blue: value)
@@ -14,7 +13,8 @@ final class FilmResponseModelTests: XCTestCase {
       XCTAssertEqual(mapped.red, mapped.green, accuracy: 0.0001)
       XCTAssertEqual(mapped.blue, mapped.green, accuracy: 0.0001)
       if value > 0 && value <= 0.25 {
-        XCTAssertGreaterThan(mapped.luminance, FilmResponseModel.map(input, response: filmResponse).luminance)
+        XCTAssertGreaterThan(mapped.luminance, 0)
+        XCTAssertLessThan(mapped.luminance, value)
       }
     }
   }
@@ -26,7 +26,13 @@ final class FilmResponseModelTests: XCTestCase {
       let before = oklabHueAndChroma(input)
       let after = oklabHueAndChroma(FilmResponseModel.map(input, response: response))
       let shift = (after.hue - before.hue + 540).truncatingRemainder(dividingBy: 360) - 180
-      XCTAssertLessThan(abs(shift), 5, "Digicam blue hue shifted by \(shift)°")
+      // A steep shared RGB curve can move blue toward cyan, but must not
+      // introduce the violet rotation of the film recipe.
+      XCTAssertGreaterThan(shift, -12)
+      XCTAssertLessThan(shift, 5)
+      let mapped = FilmResponseModel.map(input, response: response)
+      XCTAssertGreaterThan(mapped.blue, mapped.green)
+      XCTAssertGreaterThan(mapped.green, mapped.red)
     }
   }
 
