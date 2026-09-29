@@ -84,7 +84,7 @@ final class VideoProcessorTests: XCTestCase {
     XCTAssertEqual(VideoProcessor.lightLeakBaseAlpha(strength: -1, intensity: 1, alphaCap: 0.5), 0)
     XCTAssertEqual(VideoProcessor.lightLeakBaseAlpha(strength: 1, intensity: 1, alphaCap: -0.5), 0)
     XCTAssertEqual(
-      FilmRecipeCatalog.nineteenNinetyEight.stages.lightLeak?.alphaCap, 0.16,
+      FilmRecipeCatalog.nineteenNinetyEight.stages.lightLeak?.alphaCap, 0.85,
       "the video path reads the same persisted cap the still path enforces")
   }
 
@@ -211,6 +211,42 @@ final class VideoProcessorTests: XCTestCase {
     // And it is a real grade, not a pass-through of the source.
     XCTAssertGreaterThan(
       abs(centre.red - sourceCentre.red) + abs(centre.blue - sourceCentre.blue), 12 / 255)
+  }
+
+  func testVideoHalationUsesTheHighlightGlowWhenTheStageIsThresholded() {
+    // The v5 stage carries a larger amount meant for the thresholded glow.
+    // Video must honour the threshold rather than feed that amount to its
+    // legacy CIBloom, which barely spreads (radius ~1px here) and hazes
+    // instead of glowing.
+    let extent = CGRect(x: 0, y: 0, width: 200, height: 200)
+    let dark = CIImage(color: CIColor(red: 0.15, green: 0.15, blue: 0.15)).cropped(to: extent)
+    let lamp = CIImage(color: CIColor(red: 1, green: 1, blue: 1))
+      .cropped(to: CGRect(x: 90, y: 90, width: 20, height: 20))
+    let scene = lamp.composited(over: dark)
+    let sRGB = CGColorSpace(name: CGColorSpace.sRGB)!
+    let context = CIContext(options: [
+      .useSoftwareRenderer: true, .workingColorSpace: sRGB, .outputColorSpace: sRGB,
+    ])
+    func red(_ image: CIImage, x: CGFloat, y: CGFloat) -> Int {
+      var bytes = [UInt8](repeating: 0, count: 4)
+      context.render(
+        image, toBitmap: &bytes, rowBytes: 4, bounds: CGRect(x: x, y: y, width: 1, height: 1),
+        format: .RGBA8, colorSpace: CGColorSpace(name: CGColorSpace.sRGB))
+      return Int(bytes[0])
+    }
+
+    let glowStage = HalationStage(
+      amount: 0.6, radiusScale: 0.04, tint: .fixed(red: 1, green: 0.85, blue: 0.8),
+      radiusScalesWithAmount: false, highlightThreshold: 0.75)
+    let glowing = VideoProcessor.applyHalation(scene, stage: glowStage, extent: extent)
+    XCTAssertEqual(red(glowing, x: 10, y: 10), red(scene, x: 10, y: 10), accuracy: 2)
+    XCTAssertGreaterThan(red(glowing, x: 116, y: 100), red(scene, x: 116, y: 100) + 10)
+
+    // Pre-v5 stages keep the original video bloom exactly.
+    var legacyStage = glowStage
+    legacyStage.highlightThreshold = nil
+    let legacy = VideoProcessor.applyHalation(scene, stage: legacyStage, extent: extent)
+    XCTAssertLessThan(red(legacy, x: 116, y: 100), red(scene, x: 116, y: 100) + 10)
   }
 
   func testMissingSourceAndUnsupportedRecipeVersionFailBeforeExport() async throws {

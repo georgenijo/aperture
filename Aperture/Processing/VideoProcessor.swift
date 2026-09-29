@@ -277,20 +277,17 @@ final class VideoProcessor: @unchecked Sendable {
     guard extent.width.isFinite, extent.height.isFinite, extent.width > 0, extent.height > 0 else {
       throw VideoProcessorError.sourceUnreadable
     }
-    let halationAmount = recipe.halation?.amount ?? 0
     let vignetteAmount = recipe.vignette?.amount ?? 0
     let lightLeakStrength = recipe.lightLeak?.strength ?? 0
     let lightLeakAlphaCap = recipe.lightLeak?.alphaCap ?? 0.68
+    let lightLeakBlend = recipe.lightLeak?.blend ?? .sourceOver
     let grainAmount = recipe.grain?.amount ?? 0
     var output = image.cropped(to: extent)
     for cube in colorCubes {
       output = FilmColorCube.apply(output, cubeData: cube, extent: extent)
     }
-    if halationAmount > 0.001, let bloom = CIFilter(name: "CIBloom") {
-      bloom.setValue(output, forKey: kCIInputImageKey)
-      bloom.setValue(min(1, halationAmount), forKey: kCIInputIntensityKey)
-      bloom.setValue(max(1, extent.width * 0.008 * halationAmount), forKey: kCIInputRadiusKey)
-      output = bloom.outputImage?.cropped(to: extent) ?? output
+    if let halation = recipe.halation {
+      output = Self.applyHalation(output, stage: halation, extent: extent)
     }
     if vignetteAmount > 0.001, let vignette = CIFilter(name: "CIVignetteEffect") {
       vignette.setValue(output, forKey: kCIInputImageKey)
@@ -302,7 +299,7 @@ final class VideoProcessor: @unchecked Sendable {
     if let leak = decision.leak {
       output = applyLeak(
         output, leak: leak, strength: lightLeakStrength, alphaCap: lightLeakAlphaCap,
-        extent: extent)
+        blend: lightLeakBlend, extent: extent)
     }
     // CIRandomGenerator is evaluated by Core Image, not decoded into a
     // full-resolution CPU buffer. A deterministic subpixel translation per
@@ -366,10 +363,24 @@ final class VideoProcessor: @unchecked Sendable {
     }
   }
 
+  /// A thresholded stage uses the stills' highlight glow; otherwise video
+  /// keeps its original, lighter whole-frame CIBloom driven by `amount` only.
+  static func applyHalation(_ image: CIImage, stage: HalationStage, extent: CGRect) -> CIImage {
+    if let threshold = stage.highlightThreshold {
+      return FilmProcessor.highlightGlow(image, stage: stage, threshold: threshold, extent: extent)
+    }
+    guard stage.amount > 0.001, let bloom = CIFilter(name: "CIBloom") else { return image }
+    bloom.setValue(image, forKey: kCIInputImageKey)
+    bloom.setValue(min(1, stage.amount), forKey: kCIInputIntensityKey)
+    bloom.setValue(max(1, extent.width * 0.008 * stage.amount), forKey: kCIInputRadiusKey)
+    return bloom.outputImage?.cropped(to: extent) ?? image
+  }
+
   /// The leak's peak alpha at the frame edge: the persisted strength scaled
   /// by the seeded intensity, never above the stage's `alphaCap`. Legacy
   /// recipes never reach their cap (strength ≤ 0.48), so their frames are
-  /// unchanged; the 1998 recipe's 0.16 cap is what keeps its leaks subtle.
+  /// unchanged. 1998 v4 used a 0.16 cap to keep leaks subtle; v5 raises it
+  /// to 0.85 for Huji-sized leaks.
   static func lightLeakBaseAlpha(strength: Double, intensity: Double, alphaCap: Double) -> Double
   {
     min(max(0, alphaCap), max(0, strength) * max(0, intensity))
@@ -377,10 +388,10 @@ final class VideoProcessor: @unchecked Sendable {
 
   private func applyLeak(
     _ image: CIImage, leak: LightLeakDecision, strength: Double, alphaCap: Double,
-    extent: CGRect
+    blend: LightLeakStage.Blend, extent: CGRect
   ) -> CIImage {
     guard let gradient = CIFilter(name: "CILinearGradient"),
-      let composite = CIFilter(name: "CISourceOverCompositing")
+      let composite = CIFilter(name: blend.coreImageFilterName)
     else { return image }
     let points = Self.lightLeakGradientPoints(
       edge: leak.edge, position: leak.position, width: leak.width, extent: extent)
@@ -398,7 +409,7 @@ final class VideoProcessor: @unchecked Sendable {
     gradient.setValue(color, forKey: "inputColor0")
     gradient.setValue(transparentColor, forKey: "inputColor1")
     guard let overlay = gradient.outputImage?.cropped(to: extent) else { return image }
-    // Source-over preserves the developed frame everywhere the procedural
+    // Both blends preserve the developed frame everywhere the procedural
     // leak is transparent; a white blend mask would replace it instead.
     composite.setValue(overlay, forKey: kCIInputImageKey)
     composite.setValue(image, forKey: kCIInputBackgroundImageKey)

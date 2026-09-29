@@ -58,6 +58,9 @@ extension FilmProcessor {
   }
 
   func applyHalation(_ image: CIImage, stage: HalationStage, extent: CGRect) -> CIImage {
+    if let threshold = stage.highlightThreshold {
+      return Self.highlightGlow(image, stage: stage, threshold: threshold, extent: extent)
+    }
     guard stage.amount > stage.minimumAmount,
       let bloom = CIFilter(name: "CIBloom")
     else { return image }
@@ -73,18 +76,7 @@ extension FilmProcessor {
     bloom.setValue(radius, forKey: kCIInputRadiusKey)
     guard var bloomImage = bloom.outputImage?.cropped(to: extent) else { return image }
     if let tintFilter = CIFilter(name: "CIColorMatrix") {
-      let (redDiagonal, greenDiagonal, blueDiagonal): (CGFloat, CGFloat, CGFloat)
-      switch stage.tint {
-      case .warmByAmount(let red, let green, let blue):
-        let warmth = CGFloat(stage.amount)
-        redDiagonal = 1 + warmth * CGFloat(red)
-        greenDiagonal = 1 + warmth * CGFloat(green)
-        blueDiagonal = 1 - warmth * CGFloat(blue)
-      case .fixed(let red, let green, let blue):
-        redDiagonal = CGFloat(red)
-        greenDiagonal = CGFloat(green)
-        blueDiagonal = CGFloat(blue)
-      }
+      let (redDiagonal, greenDiagonal, blueDiagonal) = Self.halationTint(stage)
       tintFilter.setValue(bloomImage, forKey: kCIInputImageKey)
       tintFilter.setValue(CIVector(x: redDiagonal, y: 0, z: 0, w: 0), forKey: "inputRVector")
       tintFilter.setValue(CIVector(x: 0, y: greenDiagonal, z: 0, w: 0), forKey: "inputGVector")
@@ -97,6 +89,65 @@ extension FilmProcessor {
       opacity: min(
         CGFloat(stage.blendOpacityCap), CGFloat(stage.amount) * CGFloat(stage.blendOpacityScale)),
       extent: extent)
+  }
+
+  private static func halationTint(_ stage: HalationStage) -> (CGFloat, CGFloat, CGFloat) {
+    switch stage.tint {
+    case .warmByAmount(let red, let green, let blue):
+      let warmth = CGFloat(stage.amount)
+      return (1 + warmth * CGFloat(red), 1 + warmth * CGFloat(green), 1 - warmth * CGFloat(blue))
+    case .fixed(let red, let green, let blue):
+      return (CGFloat(red), CGFloat(green), CGFloat(blue))
+    }
+  }
+
+  /// Blooms only the light above `threshold`: the excess is rescaled to
+  /// 0...1, blurred, tinted, scaled by the capped opacity, and screened over
+  /// the frame, so lamps and flash hotspots glow into their surroundings
+  /// while shadows and midtones away from them are left untouched. Stills
+  /// and video share it.
+  static func highlightGlow(
+    _ image: CIImage, stage: HalationStage, threshold: Double, extent: CGRect
+  ) -> CIImage {
+    guard stage.amount > stage.minimumAmount,
+      let isolate = CIFilter(name: "CIColorMatrix"),
+      let clamp = CIFilter(name: "CIColorClamp"),
+      let blur = CIFilter(name: "CIGaussianBlur"),
+      let tint = CIFilter(name: "CIColorMatrix"),
+      let screen = CIFilter(name: "CIScreenBlendMode")
+    else { return image }
+    // Clamped here too: the stage's stored property can bypass its init.
+    let level = CGFloat(min(max(threshold, 0), 0.99))
+    let gain = 1 / (1 - level)
+    let bias = -level * gain
+    isolate.setValue(image, forKey: kCIInputImageKey)
+    isolate.setValue(CIVector(x: gain, y: 0, z: 0, w: 0), forKey: "inputRVector")
+    isolate.setValue(CIVector(x: 0, y: gain, z: 0, w: 0), forKey: "inputGVector")
+    isolate.setValue(CIVector(x: 0, y: 0, z: gain, w: 0), forKey: "inputBVector")
+    isolate.setValue(CIVector(x: bias, y: bias, z: bias, w: 0), forKey: "inputBiasVector")
+    clamp.setValue(isolate.outputImage, forKey: kCIInputImageKey)
+    clamp.setValue(CIVector(x: 0, y: 0, z: 0, w: 1), forKey: "inputMinComponents")
+    clamp.setValue(CIVector(x: 1, y: 1, z: 1, w: 1), forKey: "inputMaxComponents")
+    let radius: CGFloat =
+      stage.radiusScalesWithAmount
+      ? max(
+        CGFloat(stage.minimumRadius),
+        extent.width * CGFloat(stage.radiusScale) * CGFloat(stage.amount))
+      : max(CGFloat(stage.minimumRadius), extent.width * CGFloat(stage.radiusScale))
+    blur.setValue(clamp.outputImage?.clampedToExtent(), forKey: kCIInputImageKey)
+    blur.setValue(radius, forKey: kCIInputRadiusKey)
+    let opacity = min(
+      CGFloat(stage.blendOpacityCap), CGFloat(stage.amount) * CGFloat(stage.blendOpacityScale))
+    let (red, green, blue) = halationTint(stage)
+    tint.setValue(blur.outputImage?.cropped(to: extent), forKey: kCIInputImageKey)
+    tint.setValue(CIVector(x: red * opacity, y: 0, z: 0, w: 0), forKey: "inputRVector")
+    tint.setValue(CIVector(x: 0, y: green * opacity, z: 0, w: 0), forKey: "inputGVector")
+    tint.setValue(CIVector(x: 0, y: 0, z: blue * opacity, w: 0), forKey: "inputBVector")
+    tint.setValue(CIVector(x: 0, y: 0, z: 0, w: 1), forKey: "inputAVector")
+    guard let glow = tint.outputImage?.cropped(to: extent) else { return image }
+    screen.setValue(glow, forKey: kCIInputImageKey)
+    screen.setValue(image, forKey: kCIInputBackgroundImageKey)
+    return screen.outputImage?.cropped(to: extent) ?? image
   }
 
   func applySoftness(_ image: CIImage, stage: SoftnessStage, extent: CGRect) -> CIImage {
@@ -252,12 +303,13 @@ extension FilmProcessor {
     decision: LightLeakDecision,
     strength: Double,
     alphaCap: Double = 0.68,
+    blend: LightLeakStage.Blend = .sourceOver,
     extent: CGRect
   ) -> CIImage {
     guard
       let overlay = Self.makeLightLeakImage(
         extent: extent, decision: decision, strength: strength, alphaCap: alphaCap),
-      let composite = CIFilter(name: "CISourceOverCompositing")
+      let composite = CIFilter(name: blend.coreImageFilterName)
     else { return image }
     composite.setValue(overlay, forKey: kCIInputImageKey)
     composite.setValue(image, forKey: kCIInputBackgroundImageKey)

@@ -335,7 +335,7 @@ final class FilmProcessor: @unchecked Sendable {
           leakApplied = true
           image = applyLightLeak(
             image, decision: leak, strength: leakStage.strength, alphaCap: leakStage.alphaCap,
-            extent: bounds)
+            blend: leakStage.blend, extent: bounds)
         }
       case .vignette(let vignetteStage):
         image = applyVignette(image, stage: vignetteStage, extent: bounds)

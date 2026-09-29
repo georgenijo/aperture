@@ -28,7 +28,55 @@ final class GoldenRenderTests: XCTestCase {
     let fixtureName: String
     let recipe: FilmRecipe
     let seed: UInt64
+    var fileSuffix = ""
   }
+
+  /// 1998 as shipped in recipe v4, frozen here because the catalog now builds
+  /// v5. Items developed under v4 persist these stages and must keep
+  /// rendering exactly as they did; its goldens are the v4 1998 renders.
+  private static let nineteenNinetyEightV4 = FilmRecipe(
+    id: .nineteenNinetyEight,
+    version: 4,
+    displayName: "1998",
+    stages: [
+      .filmResponse(
+        FilmResponseStage(
+          matrix: [0.998348, -0.008885, -0.148114,
+            0.151087, 0.997864, -0.128046,
+            -0.044489, -0.039532, 0.999481],
+          curves: [
+            [0.000000, 0.090402, 0.152593, 0.319448, 0.439925, 0.613285, 0.779785, 0.917039, 0.994538],
+            [0.000000, 0.070095, 0.141415, 0.319199, 0.439739, 0.613283, 0.778255, 0.910293, 0.981941],
+            [0.000000, 0.047451, 0.130237, 0.318950, 0.439552, 0.613282, 0.775150, 0.903420, 0.968171],
+          ],
+          saturation: [0.758925, 1.199240, 0.579074],
+          hueChroma: [-0.008910, 0.246697, -0.133371, -0.010636, -0.002446, -0.004587, -0.164736, -0.002792],
+          hueRotate: [-0.003869, -0.122947, -0.142692, -0.002308, 0.002107, 0.150000, -0.001415, -0.110779],
+          hueLight: [-0.038137, 0.247080, -0.088487, -0.014831, -0.006916, -0.055911, -0.009129, -0.214261])),
+      .halation(
+        HalationStage(
+          amount: 0.30, radiusScale: 0.02,
+          tint: .fixed(red: 1.0, green: 0.80, blue: 0.90), radiusScalesWithAmount: false)),
+      .softness(SoftnessStage(amount: 0.72, kind: .gaussian)),
+      .dateStamp(DateStampStage(style: .sevenSegment)),
+      .chromaticAberration(
+        ChromaticAberrationStage(
+          amount: 0.78, redGain: -0.0022, blueGain: 0.0032, lateralShiftScale: 0, seeded: false)),
+      .grain(GrainStage(amount: 0.22, size: 1.0)),
+      .lightLeak(
+        LightLeakStage(
+          probability: 0.46, strength: 0.30, minWidth: 0.10, maxWidth: 0.27,
+          palette: [
+            LightLeakColor(red: 1.0, green: 0.47, blue: 0.16),
+            LightLeakColor(red: 1.0, green: 0.42, blue: 0.12),
+            LightLeakColor(red: 1.0, green: 0.52, blue: 0.20),
+          ],
+          edges: [.top, .right],
+          alphaCap: 0.16
+        )),
+      .vignette(VignetteStage(amount: 0.32)),
+    ]
+  )
 
   func testGoldenRendersMatchCapturedPipelineOutput() async throws {
     let writeDirectory = ProcessInfo.processInfo.environment["APERTURE_WRITE_GOLDENS"]
@@ -40,7 +88,9 @@ final class GoldenRenderTests: XCTestCase {
     }
 
     var cases: [GoldenCase] = []
-    for (filmIndex, film) in FilmRecipeCatalog.all.enumerated() {
+    let films = FilmRecipeCatalog.all.enumerated().map { ($0.offset, $0.element, "") }
+      + [(0, Self.nineteenNinetyEightV4, "-v4")]
+    for (filmIndex, film, fileSuffix) in films {
       for (fixtureIndex, fixtureName) in fixtureNames.enumerated() {
         let base = UInt64(1_000 + filmIndex * 100 + fixtureIndex * 10)
         let seed = findLightLeakSeed(for: film, base: base)
@@ -49,7 +99,8 @@ final class GoldenRenderTests: XCTestCase {
         XCTAssertTrue(
           applied.resolvedSettings.lightLeakApplied,
           "\(film.displayName)/\(fixtureName) must cover a light-leak render")
-        cases.append(GoldenCase(fixtureName: fixtureName, recipe: film, seed: seed))
+        cases.append(
+          GoldenCase(fixtureName: fixtureName, recipe: film, seed: seed, fileSuffix: fileSuffix))
       }
     }
     // Every stage runs on this pipeline (colour grade, halation/bloom,
@@ -73,7 +124,8 @@ final class GoldenRenderTests: XCTestCase {
       )
       let sanitizedIdentifier = testCase.recipe.id.rawValue.replacingOccurrences(
         of: ".", with: "-")
-      let fileName = "golden-\(testCase.fixtureName)-\(sanitizedIdentifier).png"
+      let fileName =
+        "golden-\(testCase.fixtureName)-\(sanitizedIdentifier)\(testCase.fileSuffix).png"
 
       if let writeDirectory {
         let directoryURL = URL(fileURLWithPath: writeDirectory, isDirectory: true)

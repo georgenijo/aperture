@@ -1,12 +1,17 @@
 # Film response fit
 
-Fits the `FilmResponseStage` used by the 1998 recipe from aligned pairs of
-iPhone originals and reference shots of the same scene taken through the
-target film app. Nothing here runs in the app; it produces the numbers pasted
+Fits the `FilmResponseStage` used by the 1998 recipe. Recipe version 4 was
+fitted from aligned pairs of iPhone originals and reference shots of the
+same scene taken through the target film app; version 5 keeps that fit's
+matrix and per-hue chroma/lightness and retargets the tone curves,
+saturation, and blue-band rotation to unpaired statistics measured across
+many target-app photos (see "Retargeting" below). Nothing here runs in the app; it produces the numbers pasted
 into `FilmRecipeCatalog.nineteenNinetyEight` and the Swift-parity fixture
 `ApertureTests/Fixtures/film-response-probes.json`.
 
-The reference images are not committed (they are George's personal photos).
+The reference images are not committed (the pairs are George's personal
+photos; the retarget set is public third-party photos used only as
+measurement targets).
 The pipeline expects them in a scratch directory, `FIT_DIR` (default
 `/tmp/fit`).
 
@@ -36,6 +41,50 @@ sips -m "/System/Library/ColorSync/Profiles/sRGB Profile.icc" -s format png orig
 .venv/bin/python export.py "$FIT_DIR/fit.json"
 ```
 
+## Retargeting (recipe v5)
+
+One dark desk scene cannot show how the target treats neutrals across the
+tonal range, overall saturation, or blues, so v5 measures those from a
+folder of target-app photos instead. No pairs are needed:
+
+```sh
+# Target statistics: per-band neutral tint, saturation, blue hue, white level.
+.venv/bin/python measure.py <target_photos_dir> "$FIT_DIR/targets.json"
+
+# Re-solve red/blue curve offsets, the saturation quadratic, and the blue
+# hue bands against those targets, starting from the committed response.
+# <source_dir> holds only original iPhone photos (not developed goldens): the
+# saturation and blue goals are ratios/shifts relative to them.
+.venv/bin/python retarget.py "$FIT_DIR/targets.json" \
+  ../../ApertureTests/Fixtures/film-response-probes.json <source_dir> "$FIT_DIR/fit.json"
+
+.venv/bin/python export.py "$FIT_DIR/fit.json"
+```
+
+The 2026-09 measurement over 30 Huji photos gave olive shadows, lavender
+mids (red and blue ~9 code values over green), cyan-mint highlights (red
+~10 under green), ~25% more saturation than iPhone sources, and blues about
+23° further toward violet. A grey ramp is the one input whose "before" is
+known without a pair, so the neutral tint is matched on a synthetic ramp
+through the full model. Scene-averaged statistics are coarse; the priors
+(shared green S-curve, smooth offsets, pinned black and white) keep the
+result a look rather than a scene fit: the cyan tint sits in the upper
+highlights (~232) while clipped white stays white, and the target's lower
+white level (~234) comes from the scene, not from greying the curve top.
+`measure.py` and `retarget.py` read `.jpg/.jpeg/.png/.webp` in any case;
+convert HEIC with `sips` first. The v5 gates are the tint, blue,
+and saturation tests in `FilmResponseModelTests`.
+
+The measurement loader converts embedded ICC profiles (including Display P3)
+to sRGB before resizing; untagged images are assumed sRGB. An invalid profile
+is rejected rather than silently measured in the wrong colour space. Both
+photo sets must contain measurable colour; grayscale-only sets are rejected
+with a validation message. Run the offline regression checks with:
+
+```sh
+.venv/bin/python -m unittest discover -s tests
+```
+
 ## Model
 
 `model.py::apply` is the reference implementation; `FilmResponseModel.map`
@@ -62,7 +111,11 @@ moved hand as a colour transform. The priors in `fit.py` encode what the
 data cannot: highlights end at white (the top knots are pinned), per-channel curves
 are a shared S-curve plus a red offset, a non-negative red-minus-blue term
 and a small non-negative green-above-mean term (so greys cannot go cool or
-magenta by construction; a green cast is only bounded, and the shipping gate
-for greys is `testGreyRampStaysNeutralToWarmUnderTheFittedResponse`), hue
+magenta by construction; a green cast is only bounded), hue
 bands with no samples stay at zero, and the fit is anchored by skin and region medians
 measured separately in each image so misalignment cannot bias them.
+
+That warm-neutral prior was a guess the pairs could not check. The v5
+measurement across many target-app photos contradicted it (their
+highlights run cyan and their mids lavender), which is why `retarget.py`
+replaces it with measured targets rather than extending `fit.py`.
