@@ -145,6 +145,11 @@ owner-only file per look, written atomically.
 **Import.** Import (and loading a saved look) accepts only supported schemas and
 the current baseline.
 
+This build targets the 1998 v5 recipe, including thresholded highlight glow and
+screen-blended leaks. Candidates authored against v4 are rejected as a different
+base recipe; use the v4 Lab build to inspect them. Reset and the neutral slider
+values inherit v5 exactly (glow 0.60, light-leak strength 0.95).
+
 1. The Swift renderer validates the controls and context and rebuilds the recipe
    from them. It never renders imported stage JSON.
 2. An included `appliedRecipe` must match the rebuild exactly, both as decoded

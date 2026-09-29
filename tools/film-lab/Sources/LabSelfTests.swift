@@ -329,9 +329,24 @@ struct LabSelfTests {
     let chromas = try sweep.map { try chroma(mapped("chroma", $0, saturated)) }
     // Non-decreasing: the most saturated settings can reach the gamut edge.
     check(zip(chromas, chromas.dropFirst()).allSatisfy { $0 <= $1 } && chromas.last! > chromas.first!, "chroma not increasing \(chromas)")
-    for (id, colour) in [("shadowChroma", FilmRGB(red: 0.3, green: 0.12, blue: 0.08)), ("highlightChroma", FilmRGB(red: 0.95, green: 0.75, blue: 0.6))] {
-      let values = try sweep.map { try chroma(mapped(id, $0, colour)) }
+    // Measure the chroma controls inside the gamut. At a clipped highlight,
+    // increasing the requested chroma can lower the final RGB chroma as one
+    // channel hits white; that is gamut clipping, not a reversed control.
+    for (id, colour) in [("shadowChroma", FilmRGB(red: 0.3, green: 0.25, blue: 0.2)), ("highlightChroma", FilmRGB(red: 0.8, green: 0.75, blue: 0.7))] {
+      let mappedColours = try sweep.map { try mapped(id, $0, colour) }
+      check(mappedColours.allSatisfy {
+        [$0.red, $0.green, $0.blue].allSatisfy { $0 > 0 && $0 < 1 }
+      }, "\(id) monotonicity probe must stay inside the gamut")
+      let values = mappedColours.map(chroma)
       check(zip(values, values.dropFirst()).allSatisfy { $0 <= $1 } && values.last! > values.first!, "\(id) not increasing \(values)")
+    }
+    for (id, colour) in [("shadowChroma", FilmRGB(red: 0.3, green: 0.12, blue: 0.08)), ("highlightChroma", FilmRGB(red: 0.95, green: 0.75, blue: 0.6))] {
+      for value in sweep {
+        let mappedColour = try mapped(id, value, colour)
+        check([mappedColour.red, mappedColour.green, mappedColour.blue].allSatisfy {
+          $0.isFinite && $0 >= 0 && $0 <= 1
+        }, "clipped \(id) must remain finite and bounded at \(value)")
+      }
     }
   }
 
@@ -553,6 +568,12 @@ struct LabSelfTests {
     var night = object(text)
     night["base"] = ["recipeId": "aperture.night", "recipeVersion": 4, "fingerprint": (object(text)["base"] as! [String: Any])["fingerprint"]!]
     expectRejected(serialize(night), "unsupported-baseline", "different base recipe")
+
+    var previousVersion = object(text)
+    var previousBase = previousVersion["base"] as! [String: Any]
+    previousBase["recipeVersion"] = LabRecipeBuilder.baseRecipe.version - 1
+    previousVersion["base"] = previousBase
+    expectRejected(serialize(previousVersion), "unsupported-baseline", "previous recipe version")
 
     var outOfRange = object(text)
     outOfRange["controls"] = ["brightness": 3]

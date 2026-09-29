@@ -3,7 +3,7 @@
   "version": 1,
   "baseRecipe": {
     "id": "aperture.1998",
-    "version": 4
+    "version": 5
   },
   "groups": [
     { "id": "tone", "label": "Tone & colour" },
@@ -129,9 +129,9 @@
       "min": 0,
       "max": 1,
       "step": 0.01,
-      "neutral": 0.3,
+      "neutral": 0.6,
       "offValue": 0,
-      "help": "Sets the halation stage amount."
+      "help": "Sets the highlight glow amount; only bright areas bloom."
     },
     {
       "id": "softness",
@@ -200,7 +200,7 @@
       "min": 0,
       "max": 1,
       "step": 0.01,
-      "neutral": 0.3,
+      "neutral": 0.95,
       "help": "Sets the recipe leak strength; a seeded leak keeps its per-shot strength scale. Zero disables the leak."
     },
     {

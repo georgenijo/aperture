@@ -351,7 +351,9 @@ class FilmLabServerTests(unittest.TestCase):
         extra["extra"] = "x"
         self.assertEqual(resolve({}, extra).code, "bad-context")
         # Neutral values canonicalise away: an explicit neutral equals unset.
-        neutral = resolve({"brightness": 0, "halation": 0.3, "lightLeak": "baseline"}).json()
+        schema = json.loads((TOOL_DIR / "controls.json").read_text())
+        halation_neutral = next(c["neutral"] for c in schema["controls"] if c["id"] == "halation")
+        neutral = resolve({"brightness": 0, "halation": halation_neutral, "lightLeak": "baseline"}).json()
         baseline = resolve({}).json()
         self.assertEqual(neutral["appliedFingerprint"], baseline["appliedFingerprint"])
         self.assertTrue(neutral["isBaseline"])
