@@ -4,6 +4,70 @@ import XCTest
 @testable import Aperture
 
 final class FilmResponseModelTests: XCTestCase {
+  func testDigicamKeepsGreysNeutralWithStrongerFlashContrast() throws {
+    let response = try XCTUnwrap(FilmRecipeCatalog.digicam.stages.filmResponse)
+    for step in 0...64 {
+      let value = Double(step) / 64
+      let input = FilmRGB(red: value, green: value, blue: value)
+      let mapped = FilmResponseModel.map(input, response: response)
+      XCTAssertEqual(mapped.red, mapped.green, accuracy: 0.0001)
+      XCTAssertEqual(mapped.blue, mapped.green, accuracy: 0.0001)
+      if value > 0 && value <= 0.25 {
+        XCTAssertGreaterThan(mapped.luminance, 0)
+        XCTAssertLessThan(mapped.luminance, value)
+      }
+    }
+  }
+
+  func testDigicamRestrainsBrightWarmChromaWithoutLiftingTheBackground() throws {
+    let response = try XCTUnwrap(FilmRecipeCatalog.digicam.stages.filmResponse)
+    let previous = FilmResponseStage(
+      matrix: [1, 0, 0, 0, 1, 0, 0, 0, 1],
+      curves: Array(repeating: [0, 0.065, 0.165, 0.325, 0.535, 0.755, 0.910, 0.980, 1], count: 3),
+      saturation: [1.04, 1.16, 1.04],
+      hueChroma: Array(repeating: 0, count: 8),
+      hueRotate: Array(repeating: 0, count: 8),
+      hueLight: Array(repeating: 0, count: 8))
+    // Warm flash-lit probes should retain colour but avoid the previous
+    // boost that pushed red toward clipping and obscured skin texture.
+    for (red, green, blue) in [(0.95, 0.70, 0.48), (0.90, 0.62, 0.42), (0.85, 0.55, 0.32)] {
+      let input = FilmRGB(red: red, green: green, blue: blue)
+      let before = FilmResponseModel.map(input, response: previous)
+      let after = FilmResponseModel.map(input, response: response)
+      XCTAssertLessThan(after.red, before.red)
+      XCTAssertLessThan(oklabHueAndChroma(after).chroma, oklabHueAndChroma(before).chroma)
+      XCTAssertGreaterThan(after.red, after.green)
+      XCTAssertGreaterThan(after.green, after.blue)
+    }
+    for value in [0.125, 0.25, 0.375] {
+      let input = FilmRGB(red: value, green: value, blue: value)
+      XCTAssertEqual(
+        FilmResponseModel.map(input, response: response).luminance,
+        FilmResponseModel.map(input, response: previous).luminance, accuracy: 0.000001)
+    }
+    let white = FilmResponseModel.map(FilmRGB(red: 1, green: 1, blue: 1), response: response)
+    XCTAssertEqual(white.red, 1, accuracy: 0.0001)
+    XCTAssertEqual(white.green, 1, accuracy: 0.0001)
+    XCTAssertEqual(white.blue, 1, accuracy: 0.0001)
+  }
+
+  func testDigicamPreservesBlueHueInsteadOfRotatingItViolet() throws {
+    let response = try XCTUnwrap(FilmRecipeCatalog.digicam.stages.filmResponse)
+    for (red, green, blue) in [(90.0, 140.0, 210.0), (150, 170, 220), (117, 133, 175), (45, 75, 160)] {
+      let input = FilmRGB(red: red / 255, green: green / 255, blue: blue / 255)
+      let before = oklabHueAndChroma(input)
+      let after = oklabHueAndChroma(FilmResponseModel.map(input, response: response))
+      let shift = (after.hue - before.hue + 540).truncatingRemainder(dividingBy: 360) - 180
+      // A steep shared RGB curve can move blue toward cyan, but must not
+      // introduce the violet rotation of the film recipe.
+      XCTAssertGreaterThan(shift, -13)
+      XCTAssertLessThan(shift, 5)
+      let mapped = FilmResponseModel.map(input, response: response)
+      XCTAssertGreaterThan(mapped.blue, mapped.green)
+      XCTAssertGreaterThan(mapped.green, mapped.red)
+    }
+  }
+
   private let huji = FilmRecipeCatalog.nineteenNinetyEight.stages.filmResponse
 
   func testIdentityResponseIsIdentity() {
@@ -37,27 +101,84 @@ final class FilmResponseModelTests: XCTestCase {
     XCTAssertGreaterThan(white.luminance, 0.9, "white must stay near white")
   }
 
-  func testGreyRampStaysNeutralToWarmUnderTheFittedResponse() throws {
-    // A grey wall must develop as a neutral-to-warm gradient, never with
-    // magenta or green regions: OKLab chroma stays small along the whole
-    // ramp and the tint, where present, points warm (a >= 0, b >= 0).
+  private func grey(_ value: Double, _ response: FilmResponseStage) -> FilmRGB {
+    FilmResponseModel.map(FilmRGB(red: value, green: value, blue: value), response: response)
+  }
+
+  private func oklabHueAndChroma(_ colour: FilmRGB) -> (hue: Double, chroma: Double) {
+    let lab = FilmResponseModel.oklab(
+      fromLinear: (
+        FilmResponseModel.srgbToLinear(colour.red),
+        FilmResponseModel.srgbToLinear(colour.green),
+        FilmResponseModel.srgbToLinear(colour.blue)
+      ))
+    let hue = atan2(lab.2, lab.1) * 180 / .pi
+    return (hue < 0 ? hue + 360 : hue, (lab.1 * lab.1 + lab.2 * lab.2).squareRoot())
+  }
+
+  func testGreyRampDevelopsTheHujiToneTint() throws {
+    // Recipe v5 retargets 1998 to measured Huji output (tools/film-response-fit
+    // measure.py → retarget.py): a grey wall develops olive shadows, lavender
+    // mids (red and blue over green), and cyan-mint highlights (green and
+    // blue over red), while black stays black and clipped white stays white:
+    // the cyan belongs to the highlights, not to blown skies and flash spots.
     let response = try XCTUnwrap(huji)
-    for step in 0...64 {
-      let value = Double(step) / 64
-      let mapped = FilmResponseModel.map(
-        FilmRGB(red: value, green: value, blue: value), response: response)
-      let lab = FilmResponseModel.oklab(
-        fromLinear: (
-          FilmResponseModel.srgbToLinear(mapped.red),
-          FilmResponseModel.srgbToLinear(mapped.green),
-          FilmResponseModel.srgbToLinear(mapped.blue)
-        ))
-      let chroma = (lab.1 * lab.1 + lab.2 * lab.2).squareRoot()
-      XCTAssertLessThan(chroma, 0.025, "grey \(value) picked up chroma \(chroma)")
-      XCTAssertGreaterThanOrEqual(lab.1, -0.004, "grey \(value) went green")
-      XCTAssertGreaterThanOrEqual(lab.2, -0.004, "grey \(value) went blue")
-      XCTAssertGreaterThanOrEqual(mapped.red, mapped.blue - 0.004, "grey \(value) went cool")
+
+    let shadow = grey(0.08, response)
+    XCTAssertGreaterThan(shadow.green, shadow.blue + 0.004, "shadows lean olive, not blue")
+    XCTAssertGreaterThan(shadow.green, shadow.red, "shadows lean olive, not red")
+
+    for value in [0.47, 0.71] {
+      let mid = grey(value, response)
+      XCTAssertGreaterThan(mid.red, mid.green + 0.015, "grey \(value) should read lavender")
+      XCTAssertGreaterThan(mid.blue, mid.green + 0.015, "grey \(value) should read lavender")
     }
+
+    let highlight = grey(0.91, response)
+    XCTAssertGreaterThan(highlight.green, highlight.red + 0.025, "highlights lean cyan")
+    XCTAssertGreaterThan(highlight.blue, highlight.red + 0.025, "highlights lean cyan")
+
+    let white = grey(1, response)
+    for channel in [white.red, white.green, white.blue] {
+      XCTAssertGreaterThan(channel, 0.98, "clipped white stays white, not cyan")
+    }
+    XCTAssertLessThan(grey(0, response).luminance, 0.01, "black stays black")
+  }
+
+  func testBluesRotateTowardVioletAndGainChroma() throws {
+    // Huji pushes skies, denim, and blue walls toward violet: each iPhone
+    // blue rotates about +15..+30 degrees in OKLab and never loses chroma.
+    let response = try XCTUnwrap(huji)
+    let blues = [(90.0, 140.0, 210.0), (150, 170, 220), (117, 133, 175), (45, 75, 160)]
+    for (red, green, blue) in blues {
+      let input = FilmRGB(red: red / 255, green: green / 255, blue: blue / 255)
+      let before = oklabHueAndChroma(input)
+      let after = oklabHueAndChroma(FilmResponseModel.map(input, response: response))
+      let shift = after.hue - before.hue
+      XCTAssertGreaterThan(shift, 15, "blue \(red),\(green),\(blue) rotated only \(shift)°")
+      XCTAssertLessThan(shift, 30, "blue \(red),\(green),\(blue) rotated \(shift)°")
+      XCTAssertGreaterThanOrEqual(after.chroma, before.chroma * 0.95)
+    }
+  }
+
+  func testMidtoneSaturationRises() throws {
+    // Huji photos measure ~25% more saturated than their iPhone sources.
+    let response = try XCTUnwrap(huji)
+    func hsvSaturation(_ colour: FilmRGB) -> Double {
+      let high = max(colour.red, colour.green, colour.blue)
+      let low = min(colour.red, colour.green, colour.blue)
+      return high > 0 ? (high - low) / high : 0
+    }
+    let samples = [
+      FilmRGB(red: 0.62, green: 0.45, blue: 0.36),  // skin
+      FilmRGB(red: 0.35, green: 0.50, blue: 0.28),  // foliage
+      FilmRGB(red: 0.70, green: 0.40, blue: 0.20),  // orange knit
+      FilmRGB(red: 0.40, green: 0.48, blue: 0.62),  // denim
+    ]
+    let before = samples.map(hsvSaturation).reduce(0, +)
+    let after = samples.map { hsvSaturation(FilmResponseModel.map($0, response: response)) }
+      .reduce(0, +)
+    XCTAssertGreaterThan(after, before * 1.1, "midtone saturation \(before) → \(after)")
   }
 
   func testCurvesBlockMustBeExactlyThreeChannelsOrFallsBackWholesale() {

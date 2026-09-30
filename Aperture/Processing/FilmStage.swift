@@ -113,6 +113,10 @@ struct HalationStage: Codable, Hashable, Sendable {
   var radiusScalesWithAmount: Bool = true
   var blendOpacityScale: Double = 0.82
   var blendOpacityCap: Double = 0.68
+  /// When set, only light above this encoded level blooms, and the glow is
+  /// screened back over the frame (recipe v5's highlight glow). `nil` keeps
+  /// the original whole-frame CIBloom haze blended at the capped opacity.
+  var highlightThreshold: Double?
 
   init(
     amount: Double,
@@ -124,7 +128,8 @@ struct HalationStage: Codable, Hashable, Sendable {
     tint: Tint = .warmByAmount(red: 0.20, green: 0.04, blue: 0.10),
     radiusScalesWithAmount: Bool = true,
     blendOpacityScale: Double = 0.82,
-    blendOpacityCap: Double = 0.68
+    blendOpacityCap: Double = 0.68,
+    highlightThreshold: Double? = nil
   ) {
     self.amount = amount
     self.minimumAmount = minimumAmount
@@ -136,11 +141,14 @@ struct HalationStage: Codable, Hashable, Sendable {
     self.radiusScalesWithAmount = radiusScalesWithAmount
     self.blendOpacityScale = blendOpacityScale
     self.blendOpacityCap = blendOpacityCap
+    // A non-finite threshold falls back to the original bloom rather than
+    // producing a NaN mask; finite values stay strictly below white.
+    self.highlightThreshold = highlightThreshold.flatMap { $0.isFinite ? min(max($0, 0), 0.99) : nil }
   }
 
   private enum CodingKeys: String, CodingKey {
     case amount, minimumAmount, intensityScale, intensityCap, radiusScale, minimumRadius
-    case tint, radiusScalesWithAmount, blendOpacityScale, blendOpacityCap
+    case tint, radiusScalesWithAmount, blendOpacityScale, blendOpacityCap, highlightThreshold
   }
 
   /// Stage-schema-2 manifests persisted the warm tint as three loose gains.
@@ -171,7 +179,8 @@ struct HalationStage: Codable, Hashable, Sendable {
       radiusScalesWithAmount: try values.decodeIfPresent(
         Bool.self, forKey: .radiusScalesWithAmount) ?? true,
       blendOpacityScale: try values.decodeIfPresent(Double.self, forKey: .blendOpacityScale) ?? 0.82,
-      blendOpacityCap: try values.decodeIfPresent(Double.self, forKey: .blendOpacityCap) ?? 0.68
+      blendOpacityCap: try values.decodeIfPresent(Double.self, forKey: .blendOpacityCap) ?? 0.68,
+      highlightThreshold: try values.decodeIfPresent(Double.self, forKey: .highlightThreshold)
     )
   }
 }
@@ -389,6 +398,25 @@ struct LightLeakStage: Codable, Hashable, Sendable {
   var edges: [LightLeakDecision.Edge] = LightLeakDecision.Edge.allCases
   /// Hard ceiling on the rendered leak's per-pixel alpha.
   var alphaCap: Double = 0.68
+  /// How the leak meets the photo. Manifests from before recipe v5 have no
+  /// `blend` and keep painting the leak over the frame.
+  var blend: Blend = .sourceOver
+
+  enum Blend: String, Codable, Hashable, Sendable {
+    /// The leak colour replaces the photo in proportion to its alpha.
+    case sourceOver
+    /// The leak only adds light, like fogged film: nothing gets darker.
+    case screen
+
+    /// The Core Image compositor both the still and video paths use. The
+    /// leak overlay is premultiplied, so screen leaves transparent areas as-is.
+    var coreImageFilterName: String {
+      switch self {
+      case .sourceOver: "CISourceOverCompositing"
+      case .screen: "CIScreenBlendMode"
+      }
+    }
+  }
 
   static let defaultPalette: [LightLeakColor] = [
     LightLeakColor(red: 1.0, green: 0.20, blue: 0.06),
@@ -410,7 +438,8 @@ struct LightLeakStage: Codable, Hashable, Sendable {
     maxIntensity: Double = 1.0,
     palette: [LightLeakColor] = LightLeakStage.defaultPalette,
     edges: [LightLeakDecision.Edge] = LightLeakDecision.Edge.allCases,
-    alphaCap: Double = 0.68
+    alphaCap: Double = 0.68,
+    blend: Blend = .sourceOver
   ) {
     // Normalise so a hand-edited or corrupt manifest can never trap the
     // renderer: reversed ranges are swapped, non-finite bounds fall back to
@@ -429,6 +458,7 @@ struct LightLeakStage: Codable, Hashable, Sendable {
     // corrupt or hand-edited manifest can't suppress every leak.
     self.edges = edges.isEmpty ? LightLeakDecision.Edge.allCases : edges
     self.alphaCap = Self.unit(alphaCap)
+    self.blend = blend
   }
 
   private static func unit(_ value: Double) -> Double {
@@ -445,7 +475,7 @@ struct LightLeakStage: Codable, Hashable, Sendable {
 
   private enum CodingKeys: String, CodingKey {
     case probability, strength, minWidth, maxWidth, minPosition, maxPosition
-    case minAngle, maxAngle, minIntensity, maxIntensity, palette, edges, alphaCap
+    case minAngle, maxAngle, minIntensity, maxIntensity, palette, edges, alphaCap, blend
   }
 
   init(from decoder: Decoder) throws {
@@ -465,7 +495,8 @@ struct LightLeakStage: Codable, Hashable, Sendable {
         ?? LightLeakStage.defaultPalette,
       edges: try values.decodeIfPresent([LightLeakDecision.Edge].self, forKey: .edges)
         ?? LightLeakDecision.Edge.allCases,
-      alphaCap: try values.decodeIfPresent(Double.self, forKey: .alphaCap) ?? 0.68
+      alphaCap: try values.decodeIfPresent(Double.self, forKey: .alphaCap) ?? 0.68,
+      blend: try values.decodeIfPresent(Blend.self, forKey: .blend) ?? .sourceOver
     )
   }
 }

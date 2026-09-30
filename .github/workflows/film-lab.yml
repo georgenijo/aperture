@@ -1,0 +1,76 @@
+name: Film Lab (macOS tool)
+
+on:
+  pull_request:
+    paths:
+      - "tools/film-lab/**"
+      - "tools/film-response-fit/**"
+      - "Aperture/Processing/**"
+      - "Aperture/Models/**"
+      - "ApertureTests/Fixtures/**"
+      - ".github/workflows/film-lab.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "tools/film-lab/**"
+      - "tools/film-response-fit/**"
+      - "Aperture/Processing/**"
+      - "Aperture/Models/**"
+      - "ApertureTests/Fixtures/**"
+      - ".github/workflows/film-lab.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  film-response-fit:
+    runs-on: macos-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install offline fitting dependencies
+        run: python -m pip install numpy pillow scipy
+      - name: Profile conversion and fitting validation tests
+        run: python -m unittest discover -s tools/film-response-fit/tests -v
+
+  film-lab:
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Toolchain
+        run: |
+          sw_vers
+          xcrun swiftc --version
+
+      - name: Build the renderer against the shipping sources (warnings are errors)
+        run: tools/film-lab/build.sh --strict --force
+
+      - name: Renderer self-tests
+        run: >-
+          tools/film-lab/.build/film-lab-renderer selftest
+          --controls tools/film-lab/controls.json
+          --fixtures ApertureTests/Fixtures
+
+      - name: Server tests (real renderer, loopback only)
+        run: python -m unittest discover -s tools/film-lab/tests -v
+
+      - name: Golden comparison (informational; macOS is not the golden platform)
+        continue-on-error: true
+        run: >-
+          tools/film-lab/.build/film-lab-renderer compare-golden
+          --controls tools/film-lab/controls.json
+          --fixtures ApertureTests/Fixtures

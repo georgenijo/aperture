@@ -83,6 +83,8 @@ final class AcceptanceRenderTests: XCTestCase {
       return FilmRecipeCatalog.night
     case "cinema":
       return FilmRecipeCatalog.cinema
+    case "digicam":
+      return FilmRecipeCatalog.digicam
     case "original", "legacyoriginal", "legacy-original":
       return FilmRecipeCatalog.legacyOriginal
     default:

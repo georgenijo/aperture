@@ -14,6 +14,32 @@ import XCTest
 /// that the executor really is driven by the array (not a fixed order), and
 /// a coarse statistical characterization of every catalog recipe.
 final class FilmStageTests: XCTestCase {
+  func testDigicamDoesNotAddFilmOpticsOrLeaksAndHonoursStampSettings() throws {
+    let film = try XCTUnwrap(FilmRecipeCatalog.recipe(for: .digicam))
+    XCTAssertNil(film.stages.softness)
+    XCTAssertNil(film.stages.chromaticAberration)
+    XCTAssertNil(film.stages.halation)
+    XCTAssertNil(film.stages.lightLeak)
+    for seed in UInt64(0)..<32 {
+      let recipe = film.resolve(
+        seed: seed, capturedAt: Date(timeIntervalSince1970: 1_700_000_000),
+        options: FilmProcessingOptions(lightLeaksEnabled: true, dateStamp: .off), timeZone: .gmt)
+      XCTAssertFalse(recipe.resolvedSettings.lightLeakApplied)
+      XCTAssertNil(FilmProcessingDecision.make(for: recipe).leak)
+      XCTAssertNil(recipe.resolvedSettings.dateStampText)
+      XCTAssertGreaterThan(try XCTUnwrap(recipe.grain).amount, 0.22)
+      XCTAssertLessThan(try XCTUnwrap(recipe.grain).amount, 0.30)
+      XCTAssertEqual(recipe.version, 7)
+    }
+    let stamped = film.resolve(
+      seed: 1, capturedAt: Date(timeIntervalSince1970: 1_700_000_000),
+      options: FilmProcessingOptions(
+        lightLeaksEnabled: true,
+        dateStamp: DateStampConfiguration(mode: .current, format: .yearMonthDay, localeIdentifier: "en_US_POSIX")),
+      timeZone: .gmt)
+    XCTAssertNotNil(stamped.resolvedSettings.dateStampText)
+  }
+
 
   // MARK: 1. v1 manifest decode equivalence + leak width by identifier
 
@@ -91,6 +117,42 @@ final class FilmStageTests: XCTestCase {
       let decoded = try decoder.decode(AppliedFilmRecipe.self, from: data)
       XCTAssertEqual(decoded, applied, recipe.displayName)
     }
+  }
+
+  // MARK: 2a. Recipe v5 fields default to the v4 rendering
+
+  func testPreV5LeakAndHalationManifestsDecodeToTheirOriginalCompositing() throws {
+    // v4-and-earlier manifests carry neither `blend` nor `highlightThreshold`;
+    // they must keep source-over leaks and the whole-frame bloom so already
+    // developed photos re-render exactly as before.
+    let decoder = ApertureJSON.makeDecoder()
+    let leakJSON = Data(
+      #"{"kind":"lightLeak","configuration":{"probability":0.46,"strength":0.3,"minWidth":0.1,"maxWidth":0.27,"alphaCap":0.16}}"#
+        .utf8)
+    guard case .lightLeak(let leak) = try decoder.decode(FilmStage.self, from: leakJSON)
+    else { return XCTFail("Expected a light leak stage") }
+    XCTAssertEqual(leak.blend, .sourceOver)
+
+    let halationJSON = Data(
+      #"{"kind":"halation","configuration":{"amount":0.3,"radiusScale":0.02}}"#.utf8)
+    guard case .halation(let halation) = try decoder.decode(FilmStage.self, from: halationJSON)
+    else { return XCTFail("Expected a halation stage") }
+    XCTAssertNil(halation.highlightThreshold)
+
+    // And the v5 values survive a round trip.
+    let encoder = ApertureJSON.makeEncoder()
+    let v5Leak = FilmStage.lightLeak(
+      LightLeakStage(probability: 0.3, strength: 0.9, minWidth: 0.2, maxWidth: 0.5, blend: .screen))
+    XCTAssertEqual(try decoder.decode(FilmStage.self, from: encoder.encode(v5Leak)), v5Leak)
+    let v5Glow = FilmStage.halation(HalationStage(amount: 0.5, highlightThreshold: 0.7))
+    XCTAssertEqual(try decoder.decode(FilmStage.self, from: encoder.encode(v5Glow)), v5Glow)
+  }
+
+  func testNineteenNinetyEightIsRecipeVersionFive() {
+    XCTAssertEqual(FilmRecipeVersion.current, 5)
+    XCTAssertTrue(FilmRecipeVersion.supported.contains(4), "v4 manifests stay renderable")
+    XCTAssertEqual(FilmRecipeCatalog.nineteenNinetyEight.version, 5)
+    XCTAssertNotNil(FilmRecipeCatalog.nineteenNinetyEight.stages.halation?.highlightThreshold)
   }
 
   // MARK: 2b. Stage-schema-2 wire format keeps its rendering semantics
@@ -309,9 +371,18 @@ final class FilmStageTests: XCTestCase {
   /// byte-exact golden isn't in play. Regenerate the table by running with
   /// `APERTURE_DUMP_REFERENCE_STATS=1` and pasting the printed rows.
   private let referenceStatistics: [ReferenceKey: ReferenceStatistics] = [
+    ReferenceKey(recipe: .digicam, fixture: "day-portrait"): ReferenceStatistics(
+      mean: 0.4517, standardDeviation: 0.3798, redMean: 0.4891, saturation: 0.4335,
+      blackClip: 0.1475),
+    ReferenceKey(recipe: .digicam, fixture: "night-flash"): ReferenceStatistics(
+      mean: 0.1715, standardDeviation: 0.2911, redMean: 0.2317, saturation: 0.2305,
+      blackClip: 0.5604),
+    ReferenceKey(recipe: .digicam, fixture: "hdr-still-life"): ReferenceStatistics(
+      mean: 0.3678, standardDeviation: 0.3800, redMean: 0.4417, saturation: 0.4466,
+      blackClip: 0.2540),
     ReferenceKey(recipe: .nineteenNinetyEight, fixture: "day-portrait"): ReferenceStatistics(
-      mean: 0.4595, standardDeviation: 0.3267, redMean: 0.5188, saturation: 0.4979,
-      blackClip: 0.0153),
+      mean: 0.4735, standardDeviation: 0.3270, redMean: 0.5509, saturation: 0.4597,
+      blackClip: 0.0308),
     ReferenceKey(recipe: .night, fixture: "day-portrait"): ReferenceStatistics(
       mean: 0.4637, standardDeviation: 0.3341, redMean: 0.4914, saturation: 0.4300,
       blackClip: 0.0712),
@@ -322,8 +393,8 @@ final class FilmStageTests: XCTestCase {
       mean: 0.4247, standardDeviation: 0.2533, redMean: 0.4417, saturation: 0.3146,
       blackClip: 0.0015),
     ReferenceKey(recipe: .nineteenNinetyEight, fixture: "night-flash"): ReferenceStatistics(
-      mean: 0.1992, standardDeviation: 0.2677, redMean: 0.2896, saturation: 0.5871,
-      blackClip: 0.1934),
+      mean: 0.2074, standardDeviation: 0.2770, redMean: 0.2935, saturation: 0.4506,
+      blackClip: 0.2756),
     ReferenceKey(recipe: .night, fixture: "night-flash"): ReferenceStatistics(
       mean: 0.1720, standardDeviation: 0.2669, redMean: 0.2297, saturation: 0.2908,
       blackClip: 0.4850),
@@ -334,8 +405,8 @@ final class FilmStageTests: XCTestCase {
       mean: 0.1932, standardDeviation: 0.1953, redMean: 0.2339, saturation: 0.3267,
       blackClip: 0.0777),
     ReferenceKey(recipe: .nineteenNinetyEight, fixture: "hdr-still-life"): ReferenceStatistics(
-      mean: 0.3756, standardDeviation: 0.3266, redMean: 0.4727, saturation: 0.6410,
-      blackClip: 0.0650),
+      mean: 0.3889, standardDeviation: 0.3331, redMean: 0.4930, saturation: 0.5927,
+      blackClip: 0.0884),
     ReferenceKey(recipe: .night, fixture: "hdr-still-life"): ReferenceStatistics(
       mean: 0.3716, standardDeviation: 0.3454, redMean: 0.4399, saturation: 0.5149,
       blackClip: 0.1624),
@@ -371,7 +442,7 @@ final class FilmStageTests: XCTestCase {
                 + "      blackClip: %.4f),",
               [
                 FilmRecipeIdentifier.nineteenNinetyEight: "nineteenNinetyEight",
-                .night: "night", .cinema: "cinema", .legacyOriginal: "legacyOriginal",
+                .night: "night", .cinema: "cinema", .digicam: "digicam", .legacyOriginal: "legacyOriginal",
               ][recipe.id] ?? recipe.id.rawValue, fixture,
               stats.mean, stats.standardDeviation, stats.redMean, stats.saturation,
               stats.blackClip))

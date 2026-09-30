@@ -6,6 +6,7 @@ struct FilmRecipeIdentifier: RawRepresentable, Codable, Hashable, Sendable {
   static let nineteenNinetyEight = FilmRecipeIdentifier(rawValue: "aperture.1998")
   static let night = FilmRecipeIdentifier(rawValue: "aperture.night")
   static let cinema = FilmRecipeIdentifier(rawValue: "aperture.cinema")
+  static let digicam = FilmRecipeIdentifier(rawValue: "aperture.digicam")
   static let legacyOriginal = FilmRecipeIdentifier(rawValue: "aperture.legacy-original")
 }
 
@@ -147,8 +148,10 @@ struct FilmParameters: Codable, Hashable, Sendable {
 /// knob set applied in a hard-coded order; v2 recipes carry that same order
 /// (and, for future recipes, other orders) explicitly as `stages`.
 enum FilmRecipeVersion {
-  static let current = 4
-  static let supported = 1...4
+  // Existing film catalog recipes stay on v5; Digicam advances independently.
+  static let current = 5
+  static let digicam = 7
+  static let supported = 1...7
   /// The first version whose manifests persist `stages` instead of the flat
   /// v1 `parameters`.
   static let stageSchema = 2
@@ -400,20 +403,49 @@ extension AppliedFilmRecipe: Codable {
 }
 
 enum FilmRecipeCatalog {
-  static let all: [FilmRecipe] = [nineteenNinetyEight, night, cinema]
+  static let all: [FilmRecipe] = [nineteenNinetyEight, night, cinema, digicam]
 
-  // The 1998 look is a fitted film response rather than hand-tuned knobs:
-  // `tools/film-response-fit/` aligns iPhone originals to Huji-shot
-  // references of the same scenes and regresses a crosstalk matrix,
-  // per-channel tone curves, tone-dependent chroma, and per-hue-band
-  // corrections against them (recipe version 4, issue #18 follow-up). The
-  // shape that came out is a real S-curve: a crushed warm toe, midtones held,
-  // highlights allowed to reach white, blues pulled down toward navy, and
-  // warm hues lifted and saturated. The optics stages below are then set
-  // visibly rather than homeopathically: a wide pink halation, the isotropic
-  // soft-focus blur, a deterministic chromatic-aberration fringe the
-  // seven-segment stamp sits on top of, film grain, a narrow top/right-only
-  // capped-alpha light leak, and a soft vignette.
+  // Compact-digital response: steeper contrast separates direct flash from
+  // the background, with coarse noise weighted toward shadows. Shared
+  // channel curves retain believable whites and blue hues. Gentler upper
+  // knots and restrained warm chroma keep flash-lit skin from turning orange.
+  // No film bloom, blur, colour fringe or light-leak stage is injected.
+  static let digicam = FilmRecipe(
+    id: .digicam,
+    version: FilmRecipeVersion.digicam,
+    displayName: "Digicam",
+    stages: [
+      .filmResponse(
+        FilmResponseStage(
+          matrix: [1, 0, 0, 0, 1, 0, 0, 0, 1],
+          curves: Array(
+            repeating: [0, 0.065, 0.165, 0.325, 0.535, 0.755, 0.885, 0.955, 1], count: 3),
+          saturation: [1.04, 1.16, 0.84],
+          hueChroma: [0, -0.06, 0, 0, 0, 0, 0, 0],
+          hueRotate: Array(repeating: 0, count: 8),
+          hueLight: [0, -0.02, 0, 0, 0, 0, 0, 0])),
+      .grain(GrainStage(amount: 0.26, size: 2.4, curveConstant: 1, curveLinear: -0.85, curveQuadratic: 0)),
+      .vignette(VignetteStage(amount: 0.22)),
+      .dateStamp(DateStampStage(style: .monospaced)),
+    ]
+  )
+
+  // The 1998 look is a film response retargeted to measured Huji output
+  // (recipe version 5). `tools/film-response-fit/` first fitted a crosstalk
+  // matrix, per-channel tone curves, tone-dependent chroma, and per-hue-band
+  // corrections to one aligned iPhone/Huji pair (v4); `measure.py` and
+  // `retarget.py` then re-solved the tone curves, saturation, and blue-band
+  // rotation against scene-averaged statistics of many Huji photos. The result:
+  // olive shadows, lavender mids, cyan-mint highlights while clipped white
+  // stays white, ~25% more saturation than the iPhone source (the v4 look
+  // read as more saturated only because of its red-cast shadows), and blues
+  // pushed toward violet. The optics stages
+  // are sized to read at phone-screen size: a thresholded highlight glow so
+  // lamps and flash hotspots bloom without hazing the shadows, a mild
+  // isotropic blur, a deterministic chromatic-aberration fringe the
+  // seven-segment stamp sits on top of, film grain, a big screen-blended
+  // red/orange/pink leak from any edge on roughly one frame in three, and a
+  // soft vignette.
   static let nineteenNinetyEight = FilmRecipe(
     id: .nineteenNinetyEight,
     version: FilmRecipeVersion.current,
@@ -425,18 +457,19 @@ enum FilmRecipeCatalog {
             0.151087, 0.997864, -0.128046,
             -0.044489, -0.039532, 0.999481],
           curves: [
-            [0.000000, 0.090402, 0.152593, 0.319448, 0.439925, 0.613285, 0.779785, 0.917039, 0.994538],
-            [0.000000, 0.070095, 0.141415, 0.319199, 0.439739, 0.613283, 0.778255, 0.910293, 0.981941],
-            [0.000000, 0.047451, 0.130237, 0.318950, 0.439552, 0.613282, 0.775150, 0.903420, 0.968171],
+            [0.000000, 0.063311, 0.139185, 0.330192, 0.471497, 0.652940, 0.791238, 0.881440, 1.000000],
+            [0.000000, 0.070095, 0.141415, 0.319199, 0.439739, 0.613283, 0.778255, 0.910293, 1.000000],
+            [0.000000, 0.057964, 0.144936, 0.342940, 0.470812, 0.648847, 0.802260, 0.911952, 1.000000],
           ],
-          saturation: [0.758925, 1.199240, 0.579074],
+          saturation: [0.898702, 1.072762, 1.440906],
           hueChroma: [-0.008910, 0.246697, -0.133371, -0.010636, -0.002446, -0.004587, -0.164736, -0.002792],
-          hueRotate: [-0.003869, -0.122947, -0.142692, -0.002308, 0.002107, 0.150000, -0.001415, -0.110779],
+          hueRotate: [-0.003869, -0.122947, -0.142692, -0.002308, 0.002107, 0.442644, 0.396280, -0.110779],
           hueLight: [-0.038137, 0.247080, -0.088487, -0.014831, -0.006916, -0.055911, -0.009129, -0.214261])),
       .halation(
         HalationStage(
-          amount: 0.30, radiusScale: 0.02,
-          tint: .fixed(red: 1.0, green: 0.80, blue: 0.90), radiusScalesWithAmount: false)),
+          amount: 0.60, radiusScale: 0.018,
+          tint: .fixed(red: 1.0, green: 0.84, blue: 0.80), radiusScalesWithAmount: false,
+          highlightThreshold: 0.70)),
       .softness(SoftnessStage(amount: 0.72, kind: .gaussian)),
       // Runs before chromatic aberration deliberately, so the stamp picks up
       // the colour fringe like a real print would.
@@ -448,14 +481,16 @@ enum FilmRecipeCatalog {
       .grain(GrainStage(amount: 0.22, size: 1.0)),
       .lightLeak(
         LightLeakStage(
-          probability: 0.46, strength: 0.30, minWidth: 0.10, maxWidth: 0.27,
+          probability: 0.30, strength: 0.95, minWidth: 0.25, maxWidth: 0.55,
+          minIntensity: 0.72, maxIntensity: 1.0,
           palette: [
-            LightLeakColor(red: 1.0, green: 0.47, blue: 0.16),
-            LightLeakColor(red: 1.0, green: 0.42, blue: 0.12),
-            LightLeakColor(red: 1.0, green: 0.52, blue: 0.20),
+            LightLeakColor(red: 1.0, green: 0.22, blue: 0.08),
+            LightLeakColor(red: 1.0, green: 0.45, blue: 0.10),
+            LightLeakColor(red: 1.0, green: 0.30, blue: 0.45),
+            LightLeakColor(red: 0.95, green: 0.12, blue: 0.20),
           ],
-          edges: [.top, .right],
-          alphaCap: 0.16
+          alphaCap: 0.85,
+          blend: .screen
         )),
       .vignette(VignetteStage(amount: 0.32)),
     ]

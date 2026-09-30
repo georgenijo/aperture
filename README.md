@@ -8,7 +8,7 @@ A native iOS still camera with a small, deliberate film vocabulary: responsive c
 
 - SwiftUI shell with AVFoundation capture/movie recording and UIKit camera preview.
 - Rear/front camera switching, tap focus/exposure, flash modes, ramped zoom, and device-dependent lens stops.
-- Three built-in recipes: 1998, Night, and Cinema; seeded grain, halation, warmth, vignette, chromatic aberration, optional light leak, and date stamp.
+- Four built-in recipes: 1998, Night, Cinema, and Digicam. Digicam v7 keeps colour neutral, with punchy flash contrast, coarse shadow texture, restrained warm highlights, and a subtle vignette; the film recipes add halation, chromatic aberration, optional light leaks, and date stamps.
 - Photo Quality is captured into each applied recipe as a JPEG compression quality, so re-development remains reproducible after Settings change.
 - Capture bytes are committed locally before development. Development is deferred off the camera/session path and can be retried.
 - Photo mode and short-film mode (with synchronized microphone audio), capped at 60 seconds per clip. Developed films play in detail view and can be shared/exported to Photos.
@@ -34,5 +34,6 @@ The simulator can cover UI, storage/recovery/migration, recipes, and determinist
 - [Release engineering and device checklist](docs/release-engineering.md)
 - [App Store release runbook](docs/app-store-release-checklist.md)
 - [Roadmap](ROADMAP.md)
+- [Local Film Lab](tools/film-lab/README.md): a Mac browser tool for tuning the 1998 look with the app's renderer
 - [Historical research and build context](huji-cam-research-and-build-guide.md)
 - [Contributor notes](CLAUDE.md)

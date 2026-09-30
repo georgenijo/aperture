@@ -28,7 +28,95 @@ final class GoldenRenderTests: XCTestCase {
     let fixtureName: String
     let recipe: FilmRecipe
     let seed: UInt64
+    var fileSuffix = ""
   }
+
+  private static let digicamV6 = FilmRecipe(
+    id: .digicam,
+    version: 6,
+    displayName: "Digicam",
+    stages: [
+      .filmResponse(
+        FilmResponseStage(
+          matrix: [1, 0, 0, 0, 1, 0, 0, 0, 1],
+          curves: Array(
+            repeating: [0, 0.065, 0.165, 0.325, 0.535, 0.755, 0.910, 0.980, 1], count: 3),
+          saturation: [1.04, 1.16, 1.04],
+          hueChroma: Array(repeating: 0, count: 8),
+          hueRotate: Array(repeating: 0, count: 8),
+          hueLight: Array(repeating: 0, count: 8))),
+      .grain(GrainStage(amount: 0.26, size: 2.4, curveConstant: 1, curveLinear: -0.85, curveQuadratic: 0)),
+      .vignette(VignetteStage(amount: 0.22)),
+      .dateStamp(DateStampStage(style: .monospaced)),
+    ]
+  )
+
+  private static let digicamV5 = FilmRecipe(
+    id: .digicam,
+    version: 5,
+    displayName: "Digicam",
+    stages: [
+      .filmResponse(
+        FilmResponseStage(
+          matrix: [1, 0, 0, 0, 1, 0, 0, 0, 1],
+          curves: Array(
+            repeating: [0, 0.105, 0.230, 0.370, 0.515, 0.655, 0.785, 0.905, 1], count: 3),
+          saturation: [1.00, 1.08, 1.02],
+          hueChroma: Array(repeating: 0, count: 8),
+          hueRotate: Array(repeating: 0, count: 8),
+          hueLight: Array(repeating: 0, count: 8))),
+      .grain(GrainStage(amount: 0.045, size: 1)),
+      .vignette(VignetteStage(amount: 0.10)),
+      .dateStamp(DateStampStage(style: .monospaced)),
+    ]
+  )
+
+  /// 1998 as shipped in recipe v4, frozen here because the catalog now builds
+  /// v5. Items developed under v4 persist these stages and must keep
+  /// rendering exactly as they did; its goldens are the v4 1998 renders.
+  private static let nineteenNinetyEightV4 = FilmRecipe(
+    id: .nineteenNinetyEight,
+    version: 4,
+    displayName: "1998",
+    stages: [
+      .filmResponse(
+        FilmResponseStage(
+          matrix: [0.998348, -0.008885, -0.148114,
+            0.151087, 0.997864, -0.128046,
+            -0.044489, -0.039532, 0.999481],
+          curves: [
+            [0.000000, 0.090402, 0.152593, 0.319448, 0.439925, 0.613285, 0.779785, 0.917039, 0.994538],
+            [0.000000, 0.070095, 0.141415, 0.319199, 0.439739, 0.613283, 0.778255, 0.910293, 0.981941],
+            [0.000000, 0.047451, 0.130237, 0.318950, 0.439552, 0.613282, 0.775150, 0.903420, 0.968171],
+          ],
+          saturation: [0.758925, 1.199240, 0.579074],
+          hueChroma: [-0.008910, 0.246697, -0.133371, -0.010636, -0.002446, -0.004587, -0.164736, -0.002792],
+          hueRotate: [-0.003869, -0.122947, -0.142692, -0.002308, 0.002107, 0.150000, -0.001415, -0.110779],
+          hueLight: [-0.038137, 0.247080, -0.088487, -0.014831, -0.006916, -0.055911, -0.009129, -0.214261])),
+      .halation(
+        HalationStage(
+          amount: 0.30, radiusScale: 0.02,
+          tint: .fixed(red: 1.0, green: 0.80, blue: 0.90), radiusScalesWithAmount: false)),
+      .softness(SoftnessStage(amount: 0.72, kind: .gaussian)),
+      .dateStamp(DateStampStage(style: .sevenSegment)),
+      .chromaticAberration(
+        ChromaticAberrationStage(
+          amount: 0.78, redGain: -0.0022, blueGain: 0.0032, lateralShiftScale: 0, seeded: false)),
+      .grain(GrainStage(amount: 0.22, size: 1.0)),
+      .lightLeak(
+        LightLeakStage(
+          probability: 0.46, strength: 0.30, minWidth: 0.10, maxWidth: 0.27,
+          palette: [
+            LightLeakColor(red: 1.0, green: 0.47, blue: 0.16),
+            LightLeakColor(red: 1.0, green: 0.42, blue: 0.12),
+            LightLeakColor(red: 1.0, green: 0.52, blue: 0.20),
+          ],
+          edges: [.top, .right],
+          alphaCap: 0.16
+        )),
+      .vignette(VignetteStage(amount: 0.32)),
+    ]
+  )
 
   func testGoldenRendersMatchCapturedPipelineOutput() async throws {
     let writeDirectory = ProcessInfo.processInfo.environment["APERTURE_WRITE_GOLDENS"]
@@ -40,16 +128,19 @@ final class GoldenRenderTests: XCTestCase {
     }
 
     var cases: [GoldenCase] = []
-    for (filmIndex, film) in FilmRecipeCatalog.all.enumerated() {
+    let films = FilmRecipeCatalog.all.enumerated().map { ($0.offset, $0.element, "") }
+      + [(0, Self.nineteenNinetyEightV4, "-v4"), (3, Self.digicamV5, "-v5"), (3, Self.digicamV6, "-v6")]
+    for (filmIndex, film, fileSuffix) in films {
       for (fixtureIndex, fixtureName) in fixtureNames.enumerated() {
         let base = UInt64(1_000 + filmIndex * 100 + fixtureIndex * 10)
         let seed = findLightLeakSeed(for: film, base: base)
         let applied = film.resolve(
           seed: seed, capturedAt: captureDate, options: options, timeZone: .gmt)
-        XCTAssertTrue(
-          applied.resolvedSettings.lightLeakApplied,
-          "\(film.displayName)/\(fixtureName) must cover a light-leak render")
-        cases.append(GoldenCase(fixtureName: fixtureName, recipe: film, seed: seed))
+        XCTAssertEqual(
+          applied.resolvedSettings.lightLeakApplied, (film.stages.lightLeak?.probability ?? 0) > 0,
+          "\(film.displayName)/\(fixtureName) must cover its configured leak behaviour")
+        cases.append(
+          GoldenCase(fixtureName: fixtureName, recipe: film, seed: seed, fileSuffix: fileSuffix))
       }
     }
     // Every stage runs on this pipeline (colour grade, halation/bloom,
@@ -73,7 +164,8 @@ final class GoldenRenderTests: XCTestCase {
       )
       let sanitizedIdentifier = testCase.recipe.id.rawValue.replacingOccurrences(
         of: ".", with: "-")
-      let fileName = "golden-\(testCase.fixtureName)-\(sanitizedIdentifier).png"
+      let fileName =
+        "golden-\(testCase.fixtureName)-\(sanitizedIdentifier)\(testCase.fileSuffix).png"
 
       if let writeDirectory {
         let directoryURL = URL(fileURLWithPath: writeDirectory, isDirectory: true)
@@ -91,6 +183,7 @@ final class GoldenRenderTests: XCTestCase {
   /// Searches seeds upward from `base` until the resolved recipe reports a
   /// light-leak render, so the golden set provably exercises that stage.
   private func findLightLeakSeed(for film: FilmRecipe, base: UInt64) -> UInt64 {
+    guard (film.stages.lightLeak?.probability ?? 0) > 0 else { return base }
     var seed = base
     for _ in 0..<5_000 {
       let applied = film.resolve(

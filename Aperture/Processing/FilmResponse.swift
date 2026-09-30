@@ -1,7 +1,8 @@
 import Foundation
 
-/// A data-driven film response, fitted offline from aligned reference pairs
-/// (`tools/film-response-fit/`) rather than hand-tuned knobs. It is the colour
+/// A data-driven colour response. The 1998 response is fitted offline from
+/// reference photos (`tools/film-response-fit/`); Digicam uses a neutral matrix
+/// and shared channel curves authored for crisp digital captures. It is the colour
 /// stage of recipes that need real tonal shape: a crosstalk matrix in linear
 /// light, one monotone tone curve per channel on the encoded domain, a
 /// tone-dependent chroma gain, and per-hue-band chroma/rotation/lightness

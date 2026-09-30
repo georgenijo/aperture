@@ -95,6 +95,8 @@ struct FilmPickerView: View {
   private func swatch(for id: FilmRecipeIdentifier) -> LinearGradient {
     let colors: [Color]
     switch id {
+    case .digicam:
+      colors = [Color(red: 0.20, green: 0.36, blue: 0.44), Color(red: 0.72, green: 0.85, blue: 0.90)]
     case .night:
       colors = [Color(red: 0.16, green: 0.21, blue: 0.29), Color(red: 0.47, green: 0.57, blue: 0.65)]
     case .cinema:
@@ -107,6 +109,8 @@ struct FilmPickerView: View {
 
   private func description(for id: FilmRecipeIdentifier) -> String {
     switch id {
+    case .digicam:
+      "Punchy flash contrast and coarse shadow texture."
     case .night:
       "Deep blacks, cool shadows, and warm halation."
     case .cinema:

@@ -1,0 +1,237 @@
+{
+  "schema": "aperture.film-lab.controls",
+  "version": 1,
+  "baseRecipe": {
+    "id": "aperture.1998",
+    "version": 5
+  },
+  "groups": [
+    { "id": "tone", "label": "Tone & colour" },
+    { "id": "optics", "label": "Optics & texture" },
+    { "id": "stamp", "label": "Stamp" }
+  ],
+  "controls": [
+    {
+      "id": "brightness",
+      "group": "tone",
+      "label": "Brightness",
+      "kind": "number",
+      "min": -1,
+      "max": 1,
+      "step": 0.01,
+      "neutral": 0,
+      "help": "Raises every fitted tone-curve knot to the power 2^(-0.8 v). Black and white stay fixed."
+    },
+    {
+      "id": "contrast",
+      "group": "tone",
+      "label": "Contrast",
+      "kind": "number",
+      "min": -1,
+      "max": 1,
+      "step": 0.01,
+      "neutral": 0,
+      "help": "S-curve around 0.5 on the fitted tone-curve knots with exponent 2^(0.8 v). Black, mid-grey and white stay fixed."
+    },
+    {
+      "id": "warmth",
+      "group": "tone",
+      "label": "Warm balance",
+      "kind": "number",
+      "min": -1,
+      "max": 1,
+      "step": 0.01,
+      "neutral": 0,
+      "help": "Red curve knots to the power 2^(-0.3 v), blue knots to 2^(0.3 v). Green, black and white stay fixed."
+    },
+    {
+      "id": "chroma",
+      "group": "tone",
+      "label": "Overall chroma",
+      "kind": "number",
+      "min": -1,
+      "max": 1,
+      "step": 0.01,
+      "neutral": 0,
+      "help": "Multiplies the tone-dependent chroma gains and the per-hue chroma band by 2^v, scaling OKLab chroma uniformly."
+    },
+    {
+      "id": "shadowChroma",
+      "group": "tone",
+      "label": "Shadow chroma",
+      "kind": "number",
+      "min": -1,
+      "max": 1,
+      "step": 0.01,
+      "neutral": 0,
+      "help": "Multiplies the fitted chroma gain at L = 0 by 2^v."
+    },
+    {
+      "id": "highlightChroma",
+      "group": "tone",
+      "label": "Highlight chroma",
+      "kind": "number",
+      "min": -1,
+      "max": 1,
+      "step": 0.01,
+      "neutral": 0,
+      "help": "Multiplies the fitted chroma gain at L = 1 by 2^v."
+    },
+    {
+      "id": "crosstalk",
+      "group": "tone",
+      "label": "Crosstalk strength",
+      "kind": "number",
+      "min": 0,
+      "max": 1.5,
+      "step": 0.01,
+      "neutral": 1,
+      "help": "Blends the fitted linear-light crosstalk matrix toward identity: I + v (M - I). Rows are still renormalised so white stays white."
+    },
+    {
+      "id": "hueChroma",
+      "group": "tone",
+      "label": "Hue chroma correction",
+      "kind": "number",
+      "min": 0,
+      "max": 1.5,
+      "step": 0.01,
+      "neutral": 1,
+      "help": "Scales the fitted per-hue-band chroma corrections."
+    },
+    {
+      "id": "hueRotate",
+      "group": "tone",
+      "label": "Hue rotation correction",
+      "kind": "number",
+      "min": 0,
+      "max": 1.5,
+      "step": 0.01,
+      "neutral": 1,
+      "help": "Scales the fitted per-hue-band hue rotations."
+    },
+    {
+      "id": "hueLightness",
+      "group": "tone",
+      "label": "Hue lightness correction",
+      "kind": "number",
+      "min": 0,
+      "max": 1.5,
+      "step": 0.01,
+      "neutral": 1,
+      "help": "Scales the fitted per-hue-band lightness corrections."
+    },
+    {
+      "id": "halation",
+      "group": "optics",
+      "label": "Halation",
+      "kind": "number",
+      "min": 0,
+      "max": 1,
+      "step": 0.01,
+      "neutral": 0.6,
+      "offValue": 0,
+      "help": "Sets the highlight glow amount; only bright areas bloom."
+    },
+    {
+      "id": "softness",
+      "group": "optics",
+      "label": "Softness",
+      "kind": "number",
+      "min": 0,
+      "max": 1,
+      "step": 0.01,
+      "neutral": 0.72,
+      "offValue": 0,
+      "help": "Sets the Gaussian softness stage amount. Its radius scales with resolution, so previews understate it."
+    },
+    {
+      "id": "fringing",
+      "group": "optics",
+      "label": "Colour fringing",
+      "kind": "number",
+      "min": 0,
+      "max": 1,
+      "step": 0.01,
+      "neutral": 0.78,
+      "offValue": 0,
+      "help": "Sets the chromatic-aberration stage amount."
+    },
+    {
+      "id": "grainAmount",
+      "group": "optics",
+      "label": "Grain amount",
+      "kind": "number",
+      "min": 0,
+      "max": 1,
+      "step": 0.01,
+      "neutral": 0.22,
+      "offValue": 0,
+      "help": "Sets the recipe grain amount; the seed's per-shot grain jitter is still added on top."
+    },
+    {
+      "id": "grainSize",
+      "group": "optics",
+      "label": "Grain size",
+      "kind": "number",
+      "min": 0.25,
+      "max": 3,
+      "step": 0.01,
+      "neutral": 1,
+      "help": "Sets the grain stage size. Grain is resolution-dependent, so previews are approximate."
+    },
+    {
+      "id": "vignette",
+      "group": "optics",
+      "label": "Vignette",
+      "kind": "number",
+      "min": 0,
+      "max": 1,
+      "step": 0.01,
+      "neutral": 0.32,
+      "offValue": 0,
+      "help": "Sets the vignette stage amount."
+    },
+    {
+      "id": "lightLeakStrength",
+      "group": "optics",
+      "label": "Light-leak strength",
+      "kind": "number",
+      "min": 0,
+      "max": 1,
+      "step": 0.01,
+      "neutral": 0.95,
+      "help": "Sets the recipe leak strength; a seeded leak keeps its per-shot strength scale. Zero disables the leak."
+    },
+    {
+      "id": "lightLeak",
+      "group": "optics",
+      "label": "Light leak",
+      "kind": "choice",
+      "options": ["baseline", "on", "off"],
+      "neutral": "baseline",
+      "offValue": "off",
+      "help": "Baseline lets the seed decide. On/off overrides it. Changing leak occurrence changes later random draws, including grain."
+    },
+    {
+      "id": "dateStamp",
+      "group": "stamp",
+      "label": "Date stamp",
+      "kind": "choice",
+      "options": ["baseline", "off"],
+      "neutral": "baseline",
+      "offValue": "off",
+      "help": "Baseline draws the seven-segment stamp from the capture context. Off removes the stamp."
+    }
+  ],
+  "context": {
+    "seed": { "label": "Seed", "default": "20260915" },
+    "capturedAt": { "label": "Capture instant (UTC)", "default": "2026-09-15T19:20:00Z" },
+    "timeZone": { "label": "Time zone", "default": "America/New_York" },
+    "photoQuality": {
+      "label": "Photo quality",
+      "default": "balanced",
+      "options": ["spaceSaving", "balanced", "maximum"]
+    }
+  }
+}

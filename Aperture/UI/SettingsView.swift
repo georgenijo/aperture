@@ -21,12 +21,14 @@ struct SettingsView: View {
               .pickerStyle(.menu)
               .tint(ApertureStyle.accent(for: settings.selectedFilm))
             }
-            settingDivider()
-            settingRow("Light leaks", detail: "Occasional edge flare") {
-              Toggle("Light leaks", isOn: setting(\.lightLeaksEnabled))
-                .labelsHidden()
-                .tint(ApertureStyle.amber)
-                .accessibilityLabel("Light Leaks")
+            if FilmRecipeCatalog.recipe(for: settings.selectedFilm)?.stages.lightLeak != nil {
+              settingDivider()
+              settingRow("Light leaks", detail: "Occasional edge flare") {
+                Toggle("Light leaks", isOn: setting(\.lightLeaksEnabled))
+                  .labelsHidden()
+                  .tint(ApertureStyle.amber)
+                  .accessibilityLabel("Light Leaks")
+              }
             }
             settingDivider()
             if isFixedDateStampFilmSelected {
@@ -40,6 +42,7 @@ struct SettingsView: View {
                 }
                 .pickerStyle(.menu)
                 .tint(ApertureStyle.amber)
+                .accessibilityIdentifier("settings-date-stamp")
               }
               if settings.dateStamp.mode != .off {
                 settingDivider()

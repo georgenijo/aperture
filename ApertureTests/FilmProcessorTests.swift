@@ -351,11 +351,66 @@ final class FilmProcessorTests: XCTestCase {
       accuracy: Double(verticalWidth) * 0.25 + 2)
   }
 
-  func testNineteenNinetyEightLightLeakOnlyPicksConfiguredEdgesAcross200Seeds() throws {
-    let leakStage = try XCTUnwrap(FilmRecipeCatalog.nineteenNinetyEight.stages.lightLeak)
-    XCTAssertEqual(leakStage.edges, [.top, .right])
+  func testHighlightGlowSpreadsFromBrightsOnlyAndLeavesDarksAlone() {
+    // v5 1998 swaps the whole-frame CIBloom haze for a thresholded glow:
+    // only light above the threshold blooms, so a lamp glows into the dark
+    // around it while a dark field far from it is untouched.
+    let extent = CGRect(x: 0, y: 0, width: 200, height: 200)
+    let dark = CIImage(color: CIColor(red: 0.15, green: 0.15, blue: 0.15)).cropped(to: extent)
+    let lamp = CIImage(color: CIColor(red: 1, green: 1, blue: 1))
+      .cropped(to: CGRect(x: 90, y: 90, width: 20, height: 20))
+    // A pale patch above the threshold in encoded sRGB, the production
+    // working space, but below it in linear light.
+    let palePatch = CIImage(color: CIColor(red: 0.85, green: 0.85, blue: 0.85))
+      .cropped(to: CGRect(x: 20, y: 150, width: 20, height: 20))
+    let scene = palePatch.composited(over: lamp.composited(over: dark))
+    let sRGB = CGColorSpace(name: CGColorSpace.sRGB)!
+    let context = CIContext(options: [
+      .useSoftwareRenderer: true, .workingColorSpace: sRGB, .outputColorSpace: sRGB,
+    ])
+    let processor = FilmProcessor(context: context)
+    let stage = HalationStage(
+      amount: 0.6, radiusScale: 0.04, tint: .fixed(red: 1, green: 0.85, blue: 0.8),
+      radiusScalesWithAmount: false, highlightThreshold: 0.75)
+    XCTAssertEqual(stage.highlightThreshold, 0.75)
+    let glowing = processor.applyHalation(scene, stage: stage, extent: extent)
 
-    var sawALeak = false
+    func pixel(_ image: CIImage, x: CGFloat, y: CGFloat) -> [UInt8] {
+      var bytes = [UInt8](repeating: 0, count: 4)
+      context.render(
+        image, toBitmap: &bytes, rowBytes: 4, bounds: CGRect(x: x, y: y, width: 1, height: 1),
+        format: .RGBA8, colorSpace: CGColorSpace(name: CGColorSpace.sRGB))
+      return bytes
+    }
+
+    let farBefore = pixel(scene, x: 10, y: 10)
+    let farAfter = pixel(glowing, x: 10, y: 10)
+    for channel in 0..<3 {
+      XCTAssertEqual(
+        Int(farAfter[channel]), Int(farBefore[channel]), accuracy: 2,
+        "darks far from any highlight must not be hazed")
+    }
+    let nearBefore = pixel(scene, x: 116, y: 100)
+    let nearAfter = pixel(glowing, x: 116, y: 100)
+    XCTAssertGreaterThan(Int(nearAfter[0]), Int(nearBefore[0]) + 10, "the lamp must glow outward")
+    XCTAssertGreaterThanOrEqual(nearAfter[0], nearAfter[2], "the glow is warm, not blue")
+    XCTAssertGreaterThan(
+      Int(pixel(glowing, x: 46, y: 160)[0]), Int(pixel(scene, x: 46, y: 160)[0]) + 3,
+      "the threshold is an encoded level, so a 0.85 patch clears 0.75 and glows")
+    let lampAfter = pixel(glowing, x: 100, y: 100)
+    XCTAssertGreaterThanOrEqual(lampAfter[1], 250, "screening never dims the highlight itself")
+  }
+
+  func testNineteenNinetyEightLightLeakCanComeFromAnyEdgeAcross200Seeds() throws {
+    // v5: Huji leaks sweep in from any side, big and screen-blended.
+    let leakStage = try XCTUnwrap(FilmRecipeCatalog.nineteenNinetyEight.stages.lightLeak)
+    XCTAssertEqual(Set(leakStage.edges), Set(LightLeakDecision.Edge.allCases))
+    XCTAssertEqual(leakStage.blend, .screen)
+    XCTAssertGreaterThanOrEqual(leakStage.alphaCap, 0.7)
+    XCTAssertGreaterThanOrEqual(leakStage.maxWidth, 0.5)
+
+    var edges = Set<LightLeakDecision.Edge>()
+    var leaks = 0
     for seed in UInt64(0)..<200 {
       let recipe = FilmRecipeCatalog.nineteenNinetyEight.resolve(
         seed: seed,
@@ -364,16 +419,52 @@ final class FilmProcessorTests: XCTestCase {
         timeZone: TimeZone(secondsFromGMT: 0)!
       )
       if let leak = FilmProcessingDecision.make(for: recipe).leak {
-        sawALeak = true
-        XCTAssertTrue(leak.edge == .top || leak.edge == .right, "seed \(seed) picked \(leak.edge)")
+        leaks += 1
+        edges.insert(leak.edge)
       }
     }
-    XCTAssertTrue(sawALeak, "expected at least one of 200 seeds to trigger a 1998 light leak")
+    XCTAssertEqual(edges, Set(LightLeakDecision.Edge.allCases))
+    // Probability 0.30: roughly one frame in three, never most of a roll.
+    XCTAssertGreaterThan(leaks, 35)
+    XCTAssertLessThan(leaks, 90)
+  }
+
+  func testScreenLightLeakOnlyBrightensAndSourceOverStillDarkensBrights() {
+    // A screen-blended leak adds light like a real fogged frame: no channel
+    // of the photo may go down. The legacy source-over blend (kept for
+    // persisted recipes) paints the leak colour over a white frame instead,
+    // pulling its blue channel down.
+    let extent = CGRect(x: 0, y: 0, width: 96, height: 64)
+    let lightGrey = CIImage(color: CIColor(red: 0.9, green: 0.9, blue: 0.9)).cropped(to: extent)
+    let decision = LightLeakDecision(
+      edge: .left, position: 0.5, width: 0.5, angle: 0,
+      color: LightLeakColor(red: 1, green: 0.2, blue: 0.05), intensity: 1)
+    let processor = FilmProcessor(context: CIContext(options: [.useSoftwareRenderer: true]))
+    let context = CIContext(options: [.useSoftwareRenderer: true])
+
+    func edgePixel(_ blend: LightLeakStage.Blend) -> [UInt8] {
+      let output = processor.applyLightLeak(
+        lightGrey, decision: decision, strength: 0.9, alphaCap: 0.85, blend: blend, extent: extent)
+      var pixel = [UInt8](repeating: 0, count: 4)
+      context.render(
+        output, toBitmap: &pixel, rowBytes: 4,
+        bounds: CGRect(x: 0, y: 32, width: 1, height: 1), format: .RGBA8,
+        colorSpace: CGColorSpace(name: CGColorSpace.sRGB))
+      return pixel
+    }
+
+    let screened = edgePixel(.screen)
+    for channel in 0..<3 {
+      XCTAssertGreaterThanOrEqual(Int(screened[channel]), 229, "screen darkened channel \(channel)")
+    }
+    XCTAssertGreaterThan(Int(screened[0]), 240, "the leak must visibly brighten red")
+    let paintedOver = edgePixel(.sourceOver)
+    XCTAssertLessThan(Int(paintedOver[2]), 200, "source-over keeps its legacy semantics")
   }
 
   func testLightLeakRenderedAlphaNeverExceedsAlphaCap() throws {
     let leakStage = try XCTUnwrap(FilmRecipeCatalog.nineteenNinetyEight.stages.lightLeak)
-    XCTAssertEqual(leakStage.alphaCap, 0.16, accuracy: 0.0001)
+    XCTAssertLessThan(leakStage.alphaCap, 1, "the cap must be exercised below full opacity")
 
     let decision = LightLeakDecision(
       edge: .top, position: 0.5, width: leakStage.maxWidth, angle: 0,
@@ -460,7 +551,7 @@ final class FilmProcessorTests: XCTestCase {
     }
 
     let valid = makeRecipe(seed: 1)
-    let unsupportedVersion = FilmRecipeVersion.current + 1
+    let unsupportedVersion = FilmRecipeVersion.supported.upperBound + 1
     let unsupported = AppliedFilmRecipe(
       identifier: valid.identifier,
       version: unsupportedVersion,

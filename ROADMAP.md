@@ -5,7 +5,7 @@ Status is based on the source in this repository, not on the data model’s futu
 ## Implemented in v1
 
 - Still capture with front/rear camera switching, focus/exposure taps, flash modes, ramped zoom, discovered lens stops, interruption/pressure handling, and responsive capture features where supported.
-- Local Lab with deterministic 1998/Night/Cinema development, optional original retention, retries, Favorites, share, add-only Photos export, deletion, cache invalidation, recovery, and legacy import. Legacy deletion tombstones are durable and a corrupt ledger pauses migration without touching source files; replacement failures retain recoverable media for launch-time reconciliation.
+- Local Lab with deterministic 1998/Night/Cinema/Digicam development, optional original retention, retries, Favorites, share, add-only Photos export, deletion, cache invalidation, recovery, and legacy import. Legacy deletion tombstones are durable and a corrupt ledger pauses migration without touching source files; replacement failures retain recoverable media for launch-time reconciliation.
 - Unit/reference-fixture tests and simulator UI coverage for denied camera access, empty Lab, settings, and navigation. `VideoProcessorTests` covers deterministic frame treatment, pre-export failures, and a successful generated-file AVAsset render with a playable output.
 
 ## Still-photo work remaining before release
